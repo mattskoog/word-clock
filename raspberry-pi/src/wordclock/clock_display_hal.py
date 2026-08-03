@@ -25,6 +25,21 @@ class ClockDisplayHAL:
     HEIGHT = 11
     NUM_LEDS = WIDTH * HEIGHT
 
+    # The face as it reads on the finished clock, top row first.
+    LETTER_ROWS = (
+        "ITLISASTHPMA",
+        "ACFIFTEENDCO",
+        "TWENTYFIVEXW",
+        "THIRTYXTENXW",
+        "MINUTESETOUR",
+        "PASTORUFOURT",
+        "SEVENXTWELVE",
+        "NINEFIVECTWO",
+        "EIGHTFELEVEN",
+        "SIXTHREEONEG",
+        "TENSEZOCLOCK",
+    )
+
     WORDS_TO_LEDS = {
         "HOUR_1": (20, 22),
         "HOUR_2": (45, 47),
@@ -55,12 +70,21 @@ class ClockDisplayHAL:
     def __init__(self, board_pin, brightness):
         self.pixels = neopixel.NeoPixel(getattr(board, board_pin), self.NUM_LEDS, brightness=brightness, auto_write=False)
 
+    @property
+    def brightness(self):
+        return self.pixels.brightness
+
+    def set_brightness(self, brightness):
+        """Change brightness. The caller still has to redraw for it to show."""
+        self.pixels.brightness = min(1.0, max(0.0, float(brightness)))
+
     def display_word(self, word, color):
         start, end = ClockDisplayHAL.WORDS_TO_LEDS[word]
         for i in range(start, end + 1):
             self.pixels[i] = color
 
-    def cartesian_to_word_clock_led_strip_index(self, x, y):
+    @classmethod
+    def cartesian_to_word_clock_led_strip_index(cls, x, y):
         if y % 2 == 0:
             row_index = ClockDisplayHAL.NUM_LEDS - (y * ClockDisplayHAL.WIDTH)
             index = row_index - (x + 1)
