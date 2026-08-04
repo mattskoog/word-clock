@@ -1,5 +1,10 @@
 *.gif
+# The bundled animations ship with the project; anything you add elsewhere does not.
+!raspberry-pi/gifs/*.gif
 .idea
 *.pyc
+__pycache__/
 DS_Store
 .DS_Store
+# Settings written by the web interface, local to each device
+raspberry-pi/wordclock.json

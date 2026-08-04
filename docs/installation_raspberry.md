@@ -26,16 +26,26 @@
    ```bash
    sudo apt update
    sudo apt install git libopenjp2-7 python3 python3-pip
-   git clone https://github.com/johniak/word-clock.git
+   git clone https://github.com/mattskoog/word-clock.git
    cd word-clock/raspberry-pi/
    sudo pip3 install --break-system-packages -r requirements.txt
    ```
 
 1. Connect your Word Clock following the [device build instructions](device_build.md).
+1. Set the time zone so the clock follows daylight saving time. Use your own
+   [IANA time zone name](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones):
+
+    ```bash
+    sudo timedatectl set-timezone Europe/Warsaw
+    ```
+
+   You can skip this and set it later in the web interface instead, where the
+   zone is a dropdown and a **Detect** button fills in your device's own zone.
+
 1. To check if everything is working, run the following command (for testing purposes only):
 
     ```bash
-    sudo python3 src/wordclock/main.py --pin D12 --brightness 0.5 --gif ./heart_art_small.gif
+    sudo python3 src/wordclock/main.py --pin D12
     ```
 
 1. To install it as a service (so it starts automatically on device startup), run the following command:
@@ -43,3 +53,35 @@
     ```bash
     ./install.sh
     ```
+
+   If your LEDs are on a different pin, or you want the web interface on another
+   port, set them first: `LED_PIN=D18 WEB_PORT=8080 ./install.sh`
+
+1. Open `http://<your-pi>:8080` in a browser on the same network to control
+   brightness, colors and animations. See [Using the clock](using_the_clock.md).
+
+## Updating an existing installation
+
+Most updates are a pull and a restart — no reinstall, and no dependency step:
+
+```bash
+cd ~/word-clock && git pull && sudo systemctl restart word_clock.service
+```
+
+Re-run `./install.sh` only when the service definition itself changes, which
+means a new command line option, a different LED pin or a different web port.
+The release that added the web interface is one of those, so coming from an
+older version the first update is:
+
+```bash
+cd ~/word-clock && git pull && cd raspberry-pi && ./install.sh
+```
+
+Re-run `sudo pip3 install --break-system-packages -r requirements.txt` only if
+`requirements.txt` changed; the web interface itself adds no new packages.
+
+Your settings live in `raspberry-pi/wordclock.json`, which is not tracked by
+git, so pulling never overwrites them and reinstalling leaves an existing file
+alone. The single `heart_art_small.gif` now sits in `raspberry-pi/gifs/`
+alongside eleven others, and the old `--gif <file>` argument still works if you
+prefer one fixed animation.

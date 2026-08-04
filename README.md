@@ -17,16 +17,22 @@ word-clock-main/
 ├── esp/
 │   └── wordclock/
 └── raspberry-pi/
-    ├── heart_art_small.gif
+    ├── gifs/                       # twelve animations played on the hour
+    ├── tools/
+    │   └── make_animations.py      # regenerates the bundled animations
     ├── install.sh
     ├── requirements.txt
     ├── src/
     │   └── wordclock/
     │       ├── __init__.py
-    │       ├── clock_display_hal.py
-    │       ├── gif.py
-    │       ├── main.py
-    │       └── word_clock.py
+    │       ├── clock_display_hal.py  # LED matrix and word-to-LED mapping
+    │       ├── gif.py                # animation library and playback
+    │       ├── main.py               # entry point and render loop
+    │       ├── settings.py           # persisted, thread-safe settings
+    │       ├── themes.py             # color themes
+    │       ├── timekeeper.py         # time zone / daylight saving handling
+    │       ├── webui.py              # local web interface
+    │       └── word_clock.py         # time to words
     └── sync.sh
 ```
 
@@ -35,6 +41,19 @@ word-clock-main/
 ### Raspberry Pi
 
 Docs for Raspberry Pi installation can be found [here](docs/installation_raspberry.md)
+
+Once installed, the Raspberry Pi build offers:
+
+- **A web interface** at `http://<your-pi>:8080` for brightness, color theme,
+  animations and time zone, with a live preview of the clock face and an
+  explicit save — see [Using the clock](docs/using_the_clock.md)
+- **Color themes**: phases of the day, solid, gradient, rainbow, color cycle and
+  spectrum, plus a sparkle shimmer that can be switched on over any of them
+- **Animations**: twelve bundled 12x11 animations, one per hour of the dial, and
+  you can drop in your own. One plays at the top of every hour, then the time
+  comes back. Choose them per hour and preview them without waiting
+- **Correct daylight saving time**: pick a time zone from the dropdown or let it
+  detect your device's, and DST is applied from the tz database
 
 ### ESP32
 
