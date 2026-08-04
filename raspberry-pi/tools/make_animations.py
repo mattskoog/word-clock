@@ -18,6 +18,8 @@ from PIL import Image
 WIDTH = 12
 HEIGHT = 11
 FRAME_MS = 110
+# Animations that want a different pace to the rest.
+FRAME_MS_OVERRIDES = {"snow": 200}
 OUTPUT_DIRECTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "gifs")
 
 CENTRE_X = (WIDTH - 1) / 2.0
@@ -94,28 +96,44 @@ def moon():
     return frames
 
 
-STAR_ROWS = [
-    ".....##.....",
-    "....####....",
-    "....####....",
-    "############",
-    ".##########.",
-    "..########..",
-    "...######...",
-    "..###..###..",
-    "..##....##..",
-    ".##......##.",
-    "............",
-]
+# Three sizes of the same five-point star. Scaling pixel art at this size has
+# to be drawn by hand; interpolating turns the points to mush.
+def _line(grid, angle, offset, half_length, color):
+    """A straight line through the middle, shifted sideways by `offset`."""
+    along_x, along_y = math.cos(angle), math.sin(angle)
+    across_x, across_y = -along_y, along_x
+    origin_x = CENTRE_X + across_x * offset
+    origin_y = CENTRE_Y + across_y * offset
+    # Quarter-pixel steps, otherwise diagonals come out dotted.
+    steps = int(half_length * 4)
+    for step in range(-steps, steps + 1):
+        distance = step / 4.0
+        put(grid, origin_x + along_x * distance, origin_y + along_y * distance, color)
 
 
 def star():
-    # A drawn five-point star that pulses in brightness; building it from arms
-    # at this size just read as a cross.
+    """Four lines crossing like a hash, breathing open as they turn.
+
+    Two perpendicular pairs map onto themselves every quarter turn, so a
+    90 degree sweep loops seamlessly and reads as continuous rotation.
+    """
+    color = (255, 205, 60)
     frames = []
-    for step in range(12):
-        pulse = 0.5 + 0.5 * math.sin(step / 12.0 * 2 * math.pi)
-        grid = from_rows(STAR_ROWS, {"#": fade((255, 205, 60), 0.45 + 0.55 * pulse)})
+    total = 16
+    for step in range(total):
+        angle = step / float(total) * (math.pi / 2)
+        # Lines land squarely on the grid at the upright hash and the diagonal
+        # X, and stair-step into noise in between, so the figure reaches full
+        # length at those two and draws itself in while it passes between them.
+        # Squared so the peak is narrow: only the angles that sit squarely on
+        # the grid stretch out, and the rest stay short enough to stay legible.
+        breath = (0.5 + 0.5 * math.cos(8 * angle)) ** 2
+        half_length = 3.1 + breath * 3.3
+        separation = 1.2 + breath * 0.5
+        grid = blank()
+        for pair in (angle, angle + math.pi / 2):
+            for side in (-1, 1):
+                _line(grid, pair, side * separation, half_length, color)
         frames.append(grid)
     return frames
 
@@ -178,34 +196,60 @@ def rocket():
 
 
 def snow():
+    """Snow drifting down across the whole face.
+
+    Slower than the rain, and each flake sways sideways as it falls. Both the
+    fall speeds and the sway complete a whole number of cycles over the loop,
+    so it wraps without a jump.
+    """
     random.seed(7)
-    flakes = [(random.randrange(WIDTH), random.uniform(0, HEIGHT), random.uniform(0.35, 0.8))
-              for _ in range(14)]
+    steps = 44
+    speeds = (0.25, 0.5)  # steps * speed is always a whole number of rows
+    flakes = [(column, random.uniform(0, HEIGHT), random.choice(speeds),
+               random.uniform(0, 2 * math.pi))
+              for column in range(WIDTH)]
+    flakes += [(column, random.uniform(0, HEIGHT), random.choice(speeds),
+                random.uniform(0, 2 * math.pi))
+               for column in list(range(WIDTH)) + random.sample(range(WIDTH), 4)]
+
     frames = []
-    for step in range(16):
+    for step in range(steps):
         grid = blank()
-        for x, y, speed in flakes:
-            position = (y + step * speed) % (HEIGHT + 1)
-            put(grid, x, position, fade((220, 240, 255), 0.45 + speed * 0.7))
+        for column, start, speed, sway in flakes:
+            position = (start + step * speed) % HEIGHT
+            drift = math.sin(2 * math.pi * step / steps + sway) * 0.9
+            # Faster flakes read as nearer, so they are brighter.
+            put(grid, (column + drift) % WIDTH, position,
+                fade((225, 240, 255), 0.4 + speed * 0.8))
         frames.append(grid)
     return frames
 
 
 def rain():
+    """Rain falling across the whole face, no cloud.
+
+    Speeds all divide the loop exactly, so the drops wrap without a visible
+    jump. Each drop trails a dimmer pixel, which is what separates rain from
+    the snow animation now that neither has anything above it.
+    """
     random.seed(11)
-    drops = [(random.randrange(WIDTH), random.uniform(0, HEIGHT), random.uniform(0.8, 1.4))
-             for _ in range(12)]
+    steps = 22
+    speeds = (0.5, 1.0, 1.5)  # steps * speed is always a whole number of rows
+    drops = [(column, random.uniform(0, HEIGHT), random.choice(speeds))
+             for column in range(WIDTH)]
+    # A second drop in some columns, so it does not fall as an even curtain.
+    drops += [(column, random.uniform(0, HEIGHT), random.choice(speeds))
+              for column in random.sample(range(WIDTH), 6)]
+
+    head = (125, 185, 255)
+    trail = (40, 85, 165)
     frames = []
-    for step in range(14):
+    for step in range(steps):
         grid = blank()
-        for y in range(2):
-            for x in range(1, WIDTH - 1):
-                grid[y][x] = (95, 105, 130)
-        for x in range(2, WIDTH - 2):
-            grid[2][x] = (75, 85, 110)
-        for x, y, speed in drops:
-            position = 3 + (y + step * speed) % (HEIGHT - 3)
-            put(grid, x, position, (90, 160, 255))
+        for column, start, speed in drops:
+            position = (start + step * speed) % HEIGHT
+            put(grid, column, position - 1, trail)
+            put(grid, column, position, head)
         frames.append(grid)
     return frames
 
@@ -312,7 +356,7 @@ def save(name, frames, directory):
         images.append(image.convert("P", palette=Image.ADAPTIVE, colors=255))
     path = os.path.join(directory, f"{name}.gif")
     images[0].save(path, save_all=True, append_images=images[1:],
-                   duration=FRAME_MS, loop=0, optimize=False)
+                   duration=FRAME_MS_OVERRIDES.get(name, FRAME_MS), loop=0, optimize=False)
     return path
 
 
