@@ -11,7 +11,7 @@ Twelve animations ship with the clock, one for each hour of the dial:
 
 One plays at the top of every hour, then the clock goes back to showing the
 time. Pick which one plays when in the web interface at `http://<your-pi>:8080`,
-where **A different animation each hour** lets you assign one per hour, and
+where **A specific animation each hour** lets you assign one per hour, and
 the ▶ button next to each one plays it on the preview.
 
 ## Adding your own

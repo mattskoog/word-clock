@@ -78,6 +78,11 @@ class ClockDisplayHAL:
         """Change brightness. The caller still has to redraw for it to show."""
         self.pixels.brightness = min(1.0, max(0.0, float(brightness)))
 
+    def display_frame(self, colors):
+        """Write a whole frame, one color per LED. Caller still calls show()."""
+        for index, color in enumerate(colors):
+            self.pixels[index] = color
+
     def display_word(self, word, color):
         start, end = ClockDisplayHAL.WORDS_TO_LEDS[word]
         for i in range(start, end + 1):

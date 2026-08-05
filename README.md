@@ -48,7 +48,7 @@ Once installed, the Raspberry Pi build offers:
   animations and time zone, with a live preview of the clock face and an
   explicit save — see [Using the clock](docs/using_the_clock.md)
 - **Color themes**: phases of the day, solid, gradient, rainbow, color cycle and
-  spectrum, plus a sparkle shimmer that can be switched on over any of them
+  spectrum, plus a letter shimmer that can be switched on over any of them
 - **Animations**: twelve bundled 12x11 animations, one per hour of the dial, and
   you can drop in your own. One plays at the top of every hour, then the time
   comes back. Choose them per hour and preview them without waiting

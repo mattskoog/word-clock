@@ -4,6 +4,11 @@ import themes
 import timekeeper
 from clock_display_hal import ClockDisplayHAL
 
+# How long the clock takes to dissolve from one time into the next. This is a
+# property of the LEDs only; the web preview switches straight over.
+CROSSFADE_SECONDS = 0.5
+CROSSFADE_INTERVAL = 0.025  # aimed at ~20 steps, fewer on slower hardware
+
 HOUR_NAMES = [
     "twelve", "one", "two", "three", "four", "five",
     "six", "seven", "eight", "nine", "ten", "eleven",
@@ -30,6 +35,18 @@ class WordClock:
         self.clock_display_hal = clock_display_hal
         self.settings = settings
         self._last_signature = None
+        self._last_frame = None  # what the LEDs are showing, for the crossfade
+        self._paused_for = 0.0  # animation time skipped while crossfading
+
+    def _elapsed(self):
+        """The animation clock, with time spent mid-crossfade taken out.
+
+        Holding this still freezes every moving theme at once - the rainbow
+        drift, the color cycle and the sparkle all read from it - and skipping
+        the frozen span afterwards means they resume where they left off
+        rather than jumping ahead by the length of the fade.
+        """
+        return time.monotonic() - self._paused_for
 
     def get_minutes_word(self, minute):
         if minute < 5:
@@ -91,20 +108,68 @@ class WordClock:
     def now(self):
         return timekeeper.now(self.settings.get("timezone"))
 
-    def invalidate(self):
-        """Force the next render to redraw, e.g. after an animation played."""
-        self._last_signature = None
+    def invalidate(self, cleared=False):
+        """Force the next render to redraw, e.g. after an animation played.
 
-    def word_colors(self, current, moment=None):
+        Pass cleared=True when the LEDs have been blanked, so the next redraw
+        fades up from black instead of from a frame that is no longer showing.
+        """
+        self._last_signature = None
+        if cleared:
+            self._last_frame = [(0, 0, 0)] * ClockDisplayHAL.NUM_LEDS
+
+    def frame_for(self, current, moment, elapsed=None):
+        """One color per LED for the given settings and time."""
+        frame = [(0, 0, 0)] * ClockDisplayHAL.NUM_LEDS
+        elapsed = self._elapsed() if elapsed is None else elapsed
+        sparkle = current["sparkle"]
+        shimmer_speed = current["shimmer_speed"]
+        brightness = current["brightness"]
+        for word, color in self.word_colors(current, moment, elapsed):
+            start, end = ClockDisplayHAL.WORDS_TO_LEDS[word]
+            for index in range(start, end + 1):
+                # Each letter carries its own phase, so the shimmer scatters
+                # across the face rather than pulsing a word at a time.
+                frame[index] = (
+                    themes.apply_sparkle(color, index, elapsed, shimmer_speed, brightness)
+                    if sparkle else color
+                )
+        return frame
+
+    def _crossfade(self, previous, target):
+        """Blend one frame into the next over CROSSFADE_SECONDS.
+
+        Driven by the clock rather than by a step count, so a slow Pi drops
+        frames instead of stretching the fade out. Returns how long it took.
+        """
+        start = time.monotonic()
+        while True:
+            step_started = time.monotonic()
+            amount = (step_started - start) / CROSSFADE_SECONDS
+            if amount >= 1.0:
+                break
+            self.clock_display_hal.display_frame(
+                [themes.blend(was, now, amount) for was, now in zip(previous, target)]
+            )
+            self.clock_display_hal.show()
+            time.sleep(max(0.0, CROSSFADE_INTERVAL - (time.monotonic() - step_started)))
+
+        # Land exactly on the target rather than wherever the last step got to.
+        self.clock_display_hal.display_frame(target)
+        self.clock_display_hal.show()
+        return time.monotonic() - start
+
+    def word_colors(self, current, moment=None, elapsed=None):
         """[(word, color)] for the given settings, without touching hardware.
 
-        The LED render and the web preview both go through here, so what the
-        browser shows cannot drift from what the clock actually displays.
+        One color per whole word, before sparkle: sparkle varies letter by
+        letter, so it is applied in frame_for once words become LEDs. Pass
+        `elapsed` to pin the animation clock to a particular instant.
         """
         theme = themes.get(current["theme"])
         moment = moment or timekeeper.now(current["timezone"])
         words = self.words_for(moment)
-        elapsed = time.monotonic()
+        elapsed = self._elapsed() if elapsed is None else elapsed
 
         colored = []
         for position, word in enumerate(words):
@@ -121,10 +186,7 @@ class WordClock:
                 elapsed=elapsed,
                 moment=moment,
             )
-            color = theme.color_for(context)
-            if current["sparkle"]:
-                color = themes.apply_sparkle(color, context)
-            colored.append((word, color))
+            colored.append((word, theme.color_for(context)))
         return colored
 
     def display_time(self, force=False):
@@ -142,11 +204,25 @@ class WordClock:
             # when the words happen to be identical.
             moment.hour,
         )
-        if not force and not themes.is_animated(current) and signature == self._last_signature:
+        changed = signature != self._last_signature
+        if not force and not themes.is_animated(current) and not changed:
             return
 
-        self.clock_display_hal.clear_pixels(show=False)
-        for word, color in self.word_colors(current, moment):
-            self.clock_display_hal.display_word(word, color)
-        self.clock_display_hal.show()
+        if changed and self._last_frame is not None:
+            # Pin the animation clock so whatever is moving - a rainbow, a
+            # color cycle, the sparkle - holds still while the words dissolve,
+            # then carries on from the same point once the fade is done.
+            frozen = self._elapsed()
+            frame = self.frame_for(current, moment, elapsed=frozen)
+            if frame != self._last_frame:
+                self._paused_for += self._crossfade(self._last_frame, frame)
+            else:
+                self.clock_display_hal.display_frame(frame)
+                self.clock_display_hal.show()
+        else:
+            frame = self.frame_for(current, moment)
+            self.clock_display_hal.display_frame(frame)
+            self.clock_display_hal.show()
+
+        self._last_frame = frame
         self._last_signature = signature

@@ -194,23 +194,45 @@ SPECTRUM_SPREAD = 0.8
 
 # Sparkle is not a theme but an effect layered over whichever theme is chosen,
 # so every theme can shimmer.
-SPARKLE_FLOOR = 0.25  # dimmest point of a word's shimmer, as a fraction
 SPARKLE_RATE = 8.0  # shimmer cycles per second at animation_speed 1.0
 
+# How far a letter may stray from the brightness you set. Kept narrow so the
+# face stays readable: a small dip below, a larger lift above.
+SPARKLE_DIP = 0.90  # down to 10% below
+SPARKLE_LIFT = 1.30  # up to 30% above
+# Set the display bright enough and there is little room left to lift into, so
+# allow a deeper dip instead to keep the shimmer visible.
+SPARKLE_BRIGHT_DIP = 0.80  # down to 20% below
+SPARKLE_BRIGHT_FROM = 0.8
 
-def _sparkle_phase(word):
-    """A stable 0-1 offset per word, so words shimmer out of step."""
-    total = sum(ord(character) * (index + 1) for index, character in enumerate(word))
-    return (total % 997) / 997.0
+
+def _sparkle_phase(led):
+    """A stable, scattered 0-1 offset per LED.
+
+    Multiplying by a large co-prime scatters neighbouring indexes to unrelated
+    phases, so adjacent letters twinkle independently instead of sweeping
+    across a word together.
+    """
+    return ((led * 2654435761) % 1000003) / 1000003.0
 
 
-def apply_sparkle(color, context):
-    """Modulate a color's brightness over time, keeping its hue."""
-    speed = context.settings["animation_speed"] * SPARKLE_RATE
+def apply_sparkle(color, led, elapsed, speed, brightness=0.5):
+    """Modulate one LED's brightness over time, keeping its hue.
+
+    Applied per letter rather than per word, so the shimmer scatters across
+    the face instead of pulsing whole words in unison.
+    """
+    dip = SPARKLE_BRIGHT_DIP if brightness >= SPARKLE_BRIGHT_FROM else SPARKLE_DIP
     wave = 0.5 + 0.5 * math.sin(
-        2 * math.pi * (context.elapsed * speed + _sparkle_phase(context.word))
+        2 * math.pi * (elapsed * speed * SPARKLE_RATE + _sparkle_phase(led))
     )
-    scale = SPARKLE_FLOOR + (1.0 - SPARKLE_FLOOR) * wave
+    scale = dip + (SPARKLE_LIFT - dip) * wave
+
+    # Lifting a channel past full would clip it and drag the hue with it, so
+    # cap the lift at whatever headroom the brightest channel actually has.
+    peak = max(color)
+    if peak:
+        scale = min(scale, 255.0 / peak)
     return tuple(int(channel * scale) for channel in color)
 
 

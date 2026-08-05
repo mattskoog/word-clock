@@ -39,7 +39,7 @@ def run(clock_display_hal, word_clock, settings, gif_library):
         if not current["display_on"]:
             if not display_is_clear:
                 clock_display_hal.clear_pixels()
-                word_clock.invalidate()
+                word_clock.invalidate(cleared=True)
                 display_is_clear = True
             time.sleep(IDLE_TICK)
             continue
@@ -73,7 +73,7 @@ def run(clock_display_hal, word_clock, settings, gif_library):
                 should_stop=lambda: not settings.get("display_on"),
             )
             clock_display_hal.clear_pixels(show=False)
-            word_clock.invalidate()
+            word_clock.invalidate(cleared=True)
 
         word_clock.display_time()
         time.sleep(ANIMATED_TICK if themes.is_animated(current) else IDLE_TICK)

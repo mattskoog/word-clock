@@ -28,11 +28,12 @@ From there you can:
 | Brightness | 0–100% |
 | Theme | Pick one of the color themes below |
 | Color / second color | Used by the solid and gradient themes. For a gradient they read top to bottom: the left swatch is the top of the clock |
-| Sparkle | Shimmer on top of any theme, see below |
-| Animation speed | How fast the animated themes and the sparkle shimmer move. Shown whenever something is animating |
+| Theme animation speed | How fast a moving theme travels. Shown only for Rainbow and Color cycle |
+| Letter shimmer | Twinkle on top of any theme, see below |
+| Shimmer speed | How fast the shimmer twinkles, independent of the theme. Shown when the shimmer is on |
 | Cuckoo clock on/off | Whether an animation plays at the top of the hour |
-| On the hour, play | A random animation, a single animation, or a different animation each hour |
-| Per-hour list | With **A different animation each hour**, choose one for each of the twelve hours |
+| On the hour, play | A random animation, a single animation, or a specific animation each hour |
+| Per-hour list | With **A specific animation each hour**, choose one for each of the twelve hours |
 | ▶ | Plays that particular animation in the preview |
 | Play for | How long the hourly animation runs, 1–60 seconds |
 | Play animation in the preview | Plays whichever animation the current settings would use at this hour |
@@ -87,13 +88,28 @@ on the time of day, so the clock warms and cools as the day goes on:
 The change is a clean switch at each boundary rather than a slow fade between
 phases. It follows the clock's own time zone, so the phases match your daylight.
 
-## Sparkle
+## Letter shimmer
 
-Sparkle is a switch rather than a theme, so it works with all six. It gently
-raises and lowers the brightness of each lit word, each on its own timing, while
-leaving the theme's colors alone — a solid red face still reads red, it just
-shimmers. Turning it on makes the display animated whatever theme is selected,
-which is why the **Animation speed** slider appears alongside it.
+Letter shimmer is a switch rather than a theme, so it works with all six. It gently
+raises and lowers the brightness of each lit **letter**, every one on its own
+timing, while leaving the theme's colors alone — a solid red face still reads
+red, it just twinkles. Because neighbouring letters are deliberately out of
+step, the shimmer scatters across the face rather than pulsing a word at a time.
+
+The swing is kept modest so the face stays readable: a letter dips up to 10%
+below the brightness you have set and lifts up to 30% above it. Above 80%
+brightness there is little room left to lift into, so it dips up to 20% instead
+to keep the shimmer visible.
+
+How much of that lift you actually see depends on the colour. An LED cannot go
+brighter than full, so the lift is capped at whatever headroom the brightest
+channel has left, which keeps the hue from shifting as it brightens. Deeper
+colours get the whole 30%; a colour already at full, such as pure white, only
+dips.
+
+It has its own **Shimmer speed**, separate from a theme's **Theme animation speed**, so
+a slowly drifting rainbow can carry a quick twinkle or the other way round.
+Turning it on makes the display animated whatever theme is selected.
 
 ## Animations
 
@@ -104,7 +120,7 @@ of every hour and then the clock goes back to showing the time.
 
 ### Choosing one per hour
 
-Set **On the hour, play** to *A different animation each hour* and a list of the twelve
+Set **On the hour, play** to *A specific animation each hour* and a list of the twelve
 hours appears, each with its own picker. Leave an hour on *Random* and it picks
 one at random when that hour comes round. The mapping uses the clock's 12-hour
 dial, so an animation set against 3 plays at both 3am and 3pm.
@@ -196,6 +212,7 @@ than crashing the clock.
   "color": [255, 255, 255],
   "secondary_color": [0, 80, 255],
   "animation_speed": 0.05,
+  "shimmer_speed": 0.05,
   "timezone": "Europe/Warsaw",
   "gifs_enabled": true,
   "gif_mode": "random",

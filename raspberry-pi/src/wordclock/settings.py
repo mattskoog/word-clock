@@ -23,7 +23,9 @@ DEFAULTS = {
     "sparkle": False,
     "color": [255, 255, 255],
     "secondary_color": [0, 80, 255],
+    # The moving themes and the letter shimmer keep their own pace.
     "animation_speed": 0.05,
+    "shimmer_speed": 0.05,
     "timezone": "",
     "gifs_enabled": True,
     "gif_mode": "random",
@@ -194,7 +196,7 @@ class Settings:
             return _boolean(value, key)
         if key == "brightness":
             return round(_number(value, key, 0.0, 1.0), 3)
-        if key == "animation_speed":
+        if key in ("animation_speed", "shimmer_speed"):
             return round(_number(value, key, 0.0, 2.0), 3)
         if key == "gif_duration":
             return round(_number(value, key, 1.0, 120.0), 1)

@@ -18,6 +18,7 @@ import gif
 import themes
 import timekeeper
 from clock_display_hal import ClockDisplayHAL
+from word_clock import CROSSFADE_SECONDS
 
 MAX_BODY_BYTES = 64 * 1024
 
@@ -146,6 +147,11 @@ PAGE_TEMPLATE = """<!doctype html>
   }
   .hour-row .play { align-self: stretch; }
   .error { color: #ff8a8a; font-size: 13px; margin-top: 8px; overflow-wrap: anywhere; }
+  /* Sits with the time and phrase under the face, so it reads as part of that
+     block rather than hanging off the left edge. */
+  #preview-error { text-align: center; }
+  label.strong { color: #e8eaf0; font-weight: 600; }
+  hr { border: 0; border-top: 1px solid #262a38; margin: 16px 0 14px; }
   .hidden { display: none; }
 
   /* Preview of the clock face */
@@ -171,11 +177,22 @@ PAGE_TEMPLATE = """<!doctype html>
     display: flex; align-items: center; justify-content: center;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: clamp(9px, 2.9vw, 16px); font-weight: 600; line-height: 1;
-    color: #33384a; transition: color .12s linear; overflow: hidden;
+    color: #33384a; overflow: hidden;
+    /* Matches the crossfade the LEDs do between times. The duration comes from
+       the clock itself so the two cannot drift apart. */
+    transition: color var(--crossfade, .5s) linear,
+                text-shadow var(--crossfade, .5s) linear;
   }
   /* The glow stands in for the light bleeding around a lit letter on the real
      clock, which is what makes an animation's shape readable there. */
   .face span.lit { text-shadow: 0 0 7px currentColor; }
+  /* While something is shimmering the face is repainted several times a
+     second, so the smoothing has to finish inside that interval or each letter
+     lags behind and the movement is damped away. */
+  .face.shimmering span { transition-duration: .3s; }
+  /* An animation's own frames are the motion; smoothing between them would
+     smear it into mush. */
+  .face.animating span { transition: none; }
 
   /* Save bar */
   .savebar {
@@ -244,18 +261,26 @@ PAGE_TEMPLATE = """<!doctype html>
       <input type="color" id="color" title="Color at the top of the clock">
       <input type="color" id="secondary-color" title="Color at the bottom of the clock">
     </div>
+    <div class="row" id="speed-row">
+      <div style="flex:1">
+        <label for="speed">Theme animation speed</label>
+        <input type="range" id="speed" min="0" max="0.5" step="0.005">
+      </div>
+      <div class="value" id="speed-value"></div>
+    </div>
+    <hr>
     <div class="row">
-      <div style="flex:1"><label for="sparkle" style="margin:0">Sparkle</label></div>
+      <div style="flex:1"><label for="sparkle" class="strong">Letter shimmer</label></div>
       <label class="switch">
         <input type="checkbox" id="sparkle"><span></span>
       </label>
     </div>
-    <div class="row" id="speed-row">
+    <div class="row" id="shimmer-speed-row">
       <div style="flex:1">
-        <label for="speed">Animation speed</label>
-        <input type="range" id="speed" min="0" max="0.5" step="0.005">
+        <label for="shimmer-speed">Shimmer speed</label>
+        <input type="range" id="shimmer-speed" min="0" max="0.5" step="0.005">
       </div>
-      <div class="value" id="speed-value"></div>
+      <div class="value" id="shimmer-speed-value"></div>
     </div>
   </section>
 
@@ -272,7 +297,7 @@ PAGE_TEMPLATE = """<!doctype html>
         <select id="gif-mode">
           <option value="random">A random animation</option>
           <option value="fixed">A single animation</option>
-          <option value="hourly">A different animation each hour</option>
+          <option value="hourly">A specific animation each hour</option>
         </select>
       </div>
     </div>
@@ -402,9 +427,11 @@ function playAnimationPreview(name) {
     }
     var index = 0;
     var deadline = Date.now() + Math.max(1000, (draft.gif_duration || 6) * 1000);
+    el('face').className = 'face animating';
     (function step() {
       if (Date.now() > deadline) {
         animationTimer = null;
+        el('face').className = isAnimated() ? 'face shimmering' : 'face';
         refreshPreview();
         return;
       }
@@ -419,6 +446,7 @@ function playAnimationPreview(name) {
 }
 
 function stopAnimationPreview() {
+  el('face').className = isAnimated() ? 'face shimmering' : 'face';
   if (animationTimer) {
     clearTimeout(animationTimer);
     animationTimer = null;
@@ -633,10 +661,19 @@ function render() {
   el('secondary-color').className = isGradient ? '' : 'hidden';
   el('color-label').textContent = isGradient ? 'Color, top to bottom' : 'Color';
   el('sparkle').checked = !!draft.sparkle;
-  // Sparkle animates any theme, so the speed control applies to it too.
-  el('speed-row').className = isAnimated() ? 'row' : 'row hidden';
-  el('speed').value = draft.animation_speed;
+  // The two run at their own pace: this slider is the theme's, and only shows
+  // for a theme that actually moves.
+  el('speed-row').className = themeIsAnimated(draft.theme) ? 'row' : 'row hidden';
+  el('shimmer-speed-row').className = draft.sparkle ? 'row' : 'row hidden';
+  if (!animationTimer) {
+    el('face').className = isAnimated() ? 'face shimmering' : 'face';
+  }
+  if (document.activeElement !== el('speed')) el('speed').value = draft.animation_speed;
   el('speed-value').textContent = Number(draft.animation_speed).toFixed(3);
+  if (document.activeElement !== el('shimmer-speed')) {
+    el('shimmer-speed').value = draft.shimmer_speed;
+  }
+  el('shimmer-speed-value').textContent = Number(draft.shimmer_speed).toFixed(3);
 
   el('gifs-enabled').checked = !!draft.gifs_enabled;
   el('gif-mode').value = draft.gif_mode;
@@ -650,6 +687,7 @@ el('gifs-enabled').onchange = function () { draft.gifs_enabled = this.checked; c
 el('brightness').oninput = function () { draft.brightness = Number(this.value); changed(); };
 el('sparkle').onchange = function () { draft.sparkle = this.checked; changed(); };
 el('speed').oninput = function () { draft.animation_speed = Number(this.value); changed(); };
+el('shimmer-speed').oninput = function () { draft.shimmer_speed = Number(this.value); changed(); };
 el('gif-duration').oninput = function () { draft.gif_duration = Number(this.value); changed(); };
 el('color').oninput = function () { draft.color = this.value; changed(); };
 el('secondary-color').oninput = function () { draft.secondary_color = this.value; changed(); };
@@ -828,6 +866,10 @@ collectCells();
 api('/api/state').then(function (next) {
   state = next;
   draft = copy(next.settings);
+  // Take the fade length from the clock rather than repeating it in the CSS.
+  if (next.crossfade) {
+    document.documentElement.style.setProperty('--crossfade', next.crossfade + 's');
+  }
   setClean('');
   // Draw the preview before the controls: if rendering a control ever throws,
   // that must not be what stops the preview from appearing.
@@ -847,10 +889,12 @@ setInterval(function () {
   pollState().then(function () { if (!dirty) refreshPreview(); });
 }, 5000);
 
-// Animated themes and sparkle need the preview refreshed to show movement.
+// Animated themes and sparkle need the preview repainted often enough to
+// represent the movement. Sampling slower than the shimmer itself aliases it
+// into jitter, so this runs several times a second while anything is moving.
 setInterval(function () {
   if (isAnimated() && draft.display_on) refreshPreview();
-}, 700);
+}, 300);
 </script>
 </body>
 </html>
@@ -879,6 +923,7 @@ def _make_handler(settings, gif_library, word_clock):
             "themes": themes.catalog(),
             "gifs": gif_library.names(),
             "gif_directory": gif_library.directory,
+            "crossfade": CROSSFADE_SECONDS,
             "clock": {
                 "time": timekeeper.describe(moment),
                 "phrase": word_clock.phrase(moment),
@@ -895,11 +940,13 @@ def _make_handler(settings, gif_library, word_clock):
         lit = {}
         if values["display_on"]:
             scale = PREVIEW_FLOOR + (1.0 - PREVIEW_FLOOR) * values["brightness"]
-            for word, color in word_clock.word_colors(values, moment):
-                start, end = ClockDisplayHAL.WORDS_TO_LEDS[word]
-                shown = "#%02x%02x%02x" % tuple(int(channel * scale) for channel in color)
-                for index in range(start, end + 1):
-                    lit[index] = shown
+            # The same per-LED frame the clock draws, so per-letter effects such
+            # as sparkle show up here exactly as they do on the LEDs.
+            for index, color in enumerate(word_clock.frame_for(values, moment)):
+                if color != (0, 0, 0):
+                    lit[index] = "#%02x%02x%02x" % tuple(
+                        int(channel * scale) for channel in color
+                    )
 
         colors = []
         for y in range(ClockDisplayHAL.HEIGHT):
