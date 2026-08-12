@@ -285,6 +285,25 @@ PAGE_TEMPLATE = """<!doctype html>
   </section>
 
   <section>
+    <h2>Background</h2>
+    <div class="row">
+      <div style="flex:1">
+        <label for="background">Animation behind the time</label>
+        <select id="background"></select>
+      </div>
+    </div>
+    <div class="row" id="background-brightness-row">
+      <div style="flex:1">
+        <label for="background-brightness">Background brightness</label>
+        <input type="range" id="background-brightness" min="0" max="1" step="0.01">
+      </div>
+      <div class="value" id="background-brightness-value"></div>
+    </div>
+    <div class="hint">Plays continuously behind the time, dimmed so the words
+      stay readable. The hourly animation still takes the whole face.</div>
+  </section>
+
+  <section>
     <div class="toggle">
       <h2 style="margin:0">Cuckoo clock</h2>
       <label class="switch">
@@ -318,7 +337,7 @@ PAGE_TEMPLATE = """<!doctype html>
       </div>
       <div class="value" id="gif-duration-value"></div>
     </div>
-    <div class="row"><button id="play-gif">Play animation in the preview</button></div>
+    <div class="row" id="play-gif-row"><button id="play-gif">Preview animation</button></div>
     <div class="hint" id="gif-status"></div>
     <div class="hint" id="gif-hint"></div>
   </section>
@@ -479,9 +498,10 @@ function themeIsAnimated(name) {
   }));
 }
 
-// Sparkle shimmers on top of any theme, so it makes the display animated too.
+// Anything that moves of its own accord: a moving theme, the letter shimmer,
+// or a background animation. Mirrors themes.is_animated on the clock.
 function isAnimated() {
-  return !!draft && (themeIsAnimated(draft.theme) || !!draft.sparkle);
+  return !!draft && (themeIsAnimated(draft.theme) || !!draft.sparkle || !!draft.background);
 }
 
 /* ---------- draft ---------- */
@@ -536,6 +556,28 @@ function renderThemes() {
   });
 }
 
+var renderedBackgrounds = null;
+
+function renderBackground() {
+  var select = el('background');
+  var signature = state.gifs.join('\\u0000');
+  if (signature !== renderedBackgrounds && document.activeElement !== select) {
+    renderedBackgrounds = signature;
+    select.innerHTML = '';
+    select.appendChild(new Option('None', ''));
+    state.gifs.forEach(function (name) {
+      select.appendChild(new Option(name.replace(/\\.gif$/i, ''), name));
+    });
+  }
+  if (document.activeElement !== select) select.value = draft.background || '';
+  el('background-brightness-row').className = draft.background ? 'row' : 'row hidden';
+  if (document.activeElement !== el('background-brightness')) {
+    el('background-brightness').value = draft.background_brightness;
+  }
+  el('background-brightness-value').textContent =
+    Math.round(draft.background_brightness * 100) + '%';
+}
+
 var renderedGifs = null;
 
 function renderGifs() {
@@ -555,6 +597,9 @@ function renderGifs() {
   if (document.activeElement !== select) select.value = draft.gif_name || state.gifs[0] || '';
   el('gif-name-row').className = draft.gif_mode === 'fixed' ? 'row' : 'row hidden';
   el('hour-rows').className = draft.gif_mode === 'hourly' ? '' : 'hidden';
+  // Each hour has its own play button, so a single one for the whole section
+  // would be ambiguous about which hour it meant.
+  el('play-gif-row').className = draft.gif_mode === 'hourly' ? 'row hidden' : 'row';
   renderHourRows();
   el('gif-hint').textContent = state.gifs.length
     ? state.gifs.length + ' animation(s) in ' + state.gif_directory
@@ -679,6 +724,7 @@ function render() {
   el('gif-mode').value = draft.gif_mode;
   el('gif-duration').value = draft.gif_duration;
   el('gif-duration-value').textContent = draft.gif_duration + 's';
+  renderBackground();
   renderGifs();
   renderTimezone();
 }
@@ -688,6 +734,11 @@ el('brightness').oninput = function () { draft.brightness = Number(this.value); 
 el('sparkle').onchange = function () { draft.sparkle = this.checked; changed(); };
 el('speed').oninput = function () { draft.animation_speed = Number(this.value); changed(); };
 el('shimmer-speed').oninput = function () { draft.shimmer_speed = Number(this.value); changed(); };
+el('background').onchange = function () { draft.background = this.value; changed(); };
+el('background-brightness').oninput = function () {
+  draft.background_brightness = Number(this.value);
+  changed();
+};
 el('gif-duration').oninput = function () { draft.gif_duration = Number(this.value); changed(); };
 el('color').oninput = function () { draft.color = this.value; changed(); };
 el('secondary-color').oninput = function () { draft.secondary_color = this.value; changed(); };

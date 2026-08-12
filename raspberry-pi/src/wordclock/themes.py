@@ -238,4 +238,6 @@ def apply_sparkle(color, led, elapsed, speed, brightness=0.5):
 
 def is_animated(settings):
     """True when the display has to be redrawn continuously."""
-    return get(settings["theme"]).animated or bool(settings.get("sparkle"))
+    return (get(settings["theme"]).animated
+            or bool(settings.get("sparkle"))
+            or bool(settings.get("background")))

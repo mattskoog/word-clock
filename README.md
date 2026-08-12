@@ -59,6 +59,15 @@ Once installed, the Raspberry Pi build offers:
 
 Docs for ESP32 installation can be found [here](docs/installation_esp32.md)
 
+### Tests
+
+The Raspberry Pi code has a test suite that runs off-hardware against stubbed
+LEDs. From `raspberry-pi/`:
+
+```bash
+python3 tests/test_wordclock.py
+```
+
 ## Development
 
 The `sync.sh` script is included to help synchronize files between a source directory and a target directory in real-time. This ensures that any changes made in the source directory are reflected in the target directory.

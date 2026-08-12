@@ -16,9 +16,8 @@ throws the draft away and goes back to what the clock is currently running.
 
 The preview is drawn by the same code that drives the LEDs, using the real
 letter layout and word-to-LED map, so what you see is what the clock will show.
-Two things it cannot reproduce faithfully: brightness on a backlit screen does
-not look like brightness on an LED, so the preview dims less than the clock
-does, and animations (GIFs) are not previewed.
+The one thing it cannot reproduce faithfully is brightness: a backlit screen
+does not behave like an LED, so the preview dims less than the clock does.
 
 From there you can:
 
@@ -31,12 +30,14 @@ From there you can:
 | Theme animation speed | How fast a moving theme travels. Shown only for Rainbow and Color cycle |
 | Letter shimmer | Twinkle on top of any theme, see below |
 | Shimmer speed | How fast the shimmer twinkles, independent of the theme. Shown when the shimmer is on |
+| Animation behind the time | A background animation, dimmed so the time stays readable. See below |
+| Background brightness | How bright the background is relative to the time. Shown when one is set |
 | Cuckoo clock on/off | Whether an animation plays at the top of the hour |
 | On the hour, play | A random animation, a single animation, or a specific animation each hour |
 | Per-hour list | With **A specific animation each hour**, choose one for each of the twelve hours |
 | ▶ | Plays that particular animation in the preview |
 | Play for | How long the hourly animation runs, 1–60 seconds |
-| Play animation in the preview | Plays whichever animation the current settings would use at this hour |
+| Preview animation | Plays whichever animation the current settings would use at this hour. Hidden in per-hour mode, where each row has its own ▶ |
 | Time zone | Pick from the list, or press **Detect**, see below |
 | Save to clock / Revert | Apply the draft to the clock, or discard it |
 
@@ -111,6 +112,21 @@ It has its own **Shimmer speed**, separate from a theme's **Theme animation spee
 a slowly drifting rainbow can carry a quick twinkle or the other way round.
 Turning it on makes the display animated whatever theme is selected.
 
+## Background animations
+
+Separate from the hourly cuckoo: a background animation plays continuously
+*behind* the time rather than taking over the face. The lit words are drawn over
+it at full strength, so the time stays readable while the animation moves around
+it.
+
+**Background brightness** is measured against the time, not against full scale.
+At 25% the animation's brightest pixel is a quarter as bright as the brightest
+lit letter, and that ratio holds whichever theme is running - so a dark theme
+like the Night phase is not swamped by a vivid animation behind it.
+
+Any animation in `raspberry-pi/gifs/` can be used. Setting one makes the display
+animated, so it redraws continuously.
+
 ## Animations
 
 Twelve animations ship with the clock — `sun`, `moon`, `star`, `smiley`,
@@ -131,8 +147,8 @@ Animations play in the preview at the top of the page, so you can see them
 without waiting for the hour to turn:
 
 - **▶** beside an animation plays that one.
-- **Play animation in the preview** plays whichever one the current settings
-  would choose at this hour — the fixed one, this hour's assignment, or a random
+- **Preview animation** plays whichever one the current settings would choose at
+  this hour — the fixed one, this hour's assignment, or a random
   pick, depending on the mode.
 
 They are masked by the letters, exactly as on the real clock, where the light
@@ -218,6 +234,8 @@ than crashing the clock.
   "gif_mode": "random",
   "gif_name": "",
   "gif_duration": 6.0,
+  "background": "",
+  "background_brightness": 0.25,
   "hour_gifs": {
     "1": "sun.gif",
     "2": "",

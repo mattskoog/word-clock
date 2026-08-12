@@ -102,7 +102,7 @@ def main(arguments):
             print(f"Ignoring --{key.replace('_', '-')}: {message}")
 
     clock_display_hal = ClockDisplayHAL(arguments.pin, settings.get("brightness"))
-    word_clock = WordClock(clock_display_hal, settings)
+    word_clock = WordClock(clock_display_hal, settings, gif_library)
 
     print(f"Config: {arguments.config}")
     print(f"Animations: {gif_directory} ({len(gif_library.names())} found)")

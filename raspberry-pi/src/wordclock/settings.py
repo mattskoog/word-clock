@@ -31,6 +31,10 @@ DEFAULTS = {
     "gif_mode": "random",
     "gif_name": "",
     "gif_duration": 6.0,
+    # An animation running quietly behind the time, as opposed to the hourly
+    # one that takes the whole face. Empty means no background.
+    "background": "",
+    "background_brightness": 0.25,
     # Which animation plays at each hour, "1" through "12". An empty value
     # means "pick a random one for that hour".
     "hour_gifs": {hour: "" for hour in HOURS},
@@ -206,7 +210,9 @@ class Settings:
             return _choice(value, key, themes.names())
         if key == "gif_mode":
             return _choice(value, key, GIF_MODES)
-        if key == "gif_name":
+        if key == "background_brightness":
+            return round(_number(value, key, 0.0, 1.0), 3)
+        if key in ("gif_name", "background"):
             if not value:
                 return ""
             # Only names the GIF library actually reported are accepted, so a

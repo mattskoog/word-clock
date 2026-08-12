@@ -1,5 +1,6 @@
 import time
 
+import gif
 import themes
 import timekeeper
 from clock_display_hal import ClockDisplayHAL
@@ -31,9 +32,13 @@ WORD_LABELS = {
 
 
 class WordClock:
-    def __init__(self, clock_display_hal, settings):
+    def __init__(self, clock_display_hal, settings, gif_library=None):
         self.clock_display_hal = clock_display_hal
         self.settings = settings
+        # Optional: without it there is simply no background layer.
+        self.gif_library = gif_library
+        self._background_name = None
+        self._background_frames = None
         self._last_signature = None
         self._last_frame = None  # what the LEDs are showing, for the crossfade
         self._paused_for = 0.0  # animation time skipped while crossfading
@@ -118,14 +123,75 @@ class WordClock:
         if cleared:
             self._last_frame = [(0, 0, 0)] * ClockDisplayHAL.NUM_LEDS
 
+    def _background_for(self, name):
+        """Decoded frames for the background animation, loaded once per name."""
+        if name != self._background_name:
+            self._background_name = name
+            self._background_frames = []
+            if name and self.gif_library:
+                path = self.gif_library.path_for(name)
+                if path:
+                    self._background_frames = gif.load_frames(path)
+        return self._background_frames
+
+    def background_frame(self, current, elapsed, ceiling=255):
+        """The background layer as one color per LED, already dimmed.
+
+        `ceiling` is how bright the time itself is. The background is scaled to
+        that rather than to full scale, so the words stay the brightest thing on
+        the face whichever theme is running - a dark theme would otherwise be
+        swamped by a vivid animation behind it.
+
+        Black everywhere when no background is set, which makes it a no-op the
+        rest of the render can composite over unconditionally.
+        """
+        blank = [(0, 0, 0)] * ClockDisplayHAL.NUM_LEDS
+        frames = self._background_for(current.get("background", ""))
+        if not frames:
+            return blank
+
+        # Walk the animation's own frame delays so it plays at its authored
+        # speed, looping for as long as the background is switched on.
+        total = sum(delay for _, delay in frames) or 1.0
+        position = elapsed % total
+        grid = frames[-1][0]
+        for candidate, delay in frames:
+            if position < delay:
+                grid = candidate
+                break
+            position -= delay
+
+        # Scale so the animation's own brightest pixel lands at the requested
+        # fraction of the time's brightness.
+        peak = max((max(color) for row in grid for color in row), default=0)
+        if not peak:
+            return blank
+        scale = (ceiling * current.get("background_brightness", 0.25)) / peak
+
+        for y, row in enumerate(grid):
+            for x, color in enumerate(row):
+                if color != (0, 0, 0):
+                    index = ClockDisplayHAL.cartesian_to_word_clock_led_strip_index(x, y)
+                    blank[index] = tuple(int(channel * scale) for channel in color)
+        return blank
+
     def frame_for(self, current, moment, elapsed=None):
-        """One color per LED for the given settings and time."""
-        frame = [(0, 0, 0)] * ClockDisplayHAL.NUM_LEDS
+        """One color per LED for the given settings and time.
+
+        The background animation is laid down first and the lit words painted
+        over it at full strength, so the time stays legible against it.
+        """
         elapsed = self._elapsed() if elapsed is None else elapsed
+        lit = self.word_colors(current, moment, elapsed)
+        # How bright the time is, which is what the background is measured
+        # against. Falls back to full scale if the theme somehow renders black.
+        ceiling = max((max(color) for _, color in lit), default=0) or 255
+
+        frame = self.background_frame(current, elapsed, ceiling)
         sparkle = current["sparkle"]
         shimmer_speed = current["shimmer_speed"]
         brightness = current["brightness"]
-        for word, color in self.word_colors(current, moment, elapsed):
+        for word, color in lit:
             start, end = ClockDisplayHAL.WORDS_TO_LEDS[word]
             for index in range(start, end + 1):
                 # Each letter carries its own phase, so the shimmer scatters
