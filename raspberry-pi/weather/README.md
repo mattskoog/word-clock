@@ -52,6 +52,21 @@ and lets the flash land, which is what a storm should look like.
 If you draw your own, that is the rule to design against — an animation with one
 very bright pixel will sit dim everywhere else.
 
+## Looking at them
+
+There is a workbench for this, deliberately kept out of the clock's own web
+interface:
+
+```bash
+python3 tools/preview_weather.py && open weather_preview.html
+```
+
+It writes one self-contained page showing all seven on real clock faces, with
+brightness sliders, so they can be judged at the low settings they actually run
+at. The frames are built through the clock's own render path, so the page cannot
+drift from what the LEDs would draw. The file is gitignored and nothing about it
+reaches the Pi.
+
 ## Regenerating these
 
 ```bash

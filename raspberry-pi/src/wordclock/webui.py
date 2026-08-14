@@ -24,9 +24,32 @@ from word_clock import CROSSFADE_SECONDS
 
 MAX_BODY_BYTES = 64 * 1024
 
-# LEDs are emissive, a phone screen is not, so a linear brightness scale would
-# make the preview unreadable long before the clock itself got dim.
-PREVIEW_FLOOR = 0.4
+# The clock works in linear light: a WS2812B's duty cycle tracks the byte it is
+# handed, so value 5 emits 2% of full output. CSS colours are not linear - they
+# are sRGB encoded, and a screen turns the same 5 into about 0.15% of its own
+# output. Writing an LED value straight into a colour therefore loses more than
+# a factor of ten at the dim end, which is why a background that looks right on
+# the clock is invisible in the browser.
+#
+# Encoding the value the way a screen expects fixes the whole range at once,
+# rather than the single fixed lift this used to apply, which could only be
+# right at one setting.
+PREVIEW_GAMMA = 2.2
+
+# Exposure, in the photographic sense: how bright the clock is in the room you
+# look at it in, against how bright your screen is. 1.0 matches relative light
+# output. Raise it if the preview reads darker than the clock, lower it if the
+# preview reads brighter.
+PREVIEW_EXPOSURE = 1.0
+
+
+def to_screen(color):
+    """An LED's linear colour as the sRGB one a screen has to be given."""
+    encoded = []
+    for channel in color:
+        level = min(1.0, max(0.0, PREVIEW_EXPOSURE * channel / 255.0))
+        encoded.append(min(255, int(round(255.0 * (level ** (1.0 / PREVIEW_GAMMA))))))
+    return "#%02x%02x%02x" % tuple(encoded)
 
 PAGE_TEMPLATE = """<!doctype html>
 <html lang="en">
@@ -1160,20 +1183,13 @@ def _make_handler(settings, gif_library, background_library, word_clock,
 
         lit = {}
         if values["display_on"]:
-            # The frame already carries its brightness. Lift the whole thing by
-            # one factor so a screen stays legible at settings that read fine on
-            # an LED, without changing how the layers sit against each other.
-            brightness = values["brightness"]
-            lift = 1.0
-            if brightness > 0:
-                lift = (PREVIEW_FLOOR + (1.0 - PREVIEW_FLOOR) * brightness) / brightness
             # The same per-LED frame the clock draws, so per-letter effects such
-            # as sparkle show up here exactly as they do on the LEDs.
+            # as sparkle show up here exactly as they do on the LEDs. Only the
+            # encoding differs, and it is applied per channel rather than as one
+            # scale factor, so the layers keep their relationship to each other.
             for index, color in enumerate(word_clock.frame_for(values, moment)):
                 if color != (0, 0, 0):
-                    lit[index] = "#%02x%02x%02x" % tuple(
-                        min(255, int(channel * lift)) for channel in color
-                    )
+                    lit[index] = to_screen(color)
 
         colors = []
         for y in range(ClockDisplayHAL.HEIGHT):
@@ -1199,13 +1215,14 @@ def _make_handler(settings, gif_library, background_library, word_clock,
         if not path:
             return {"error": "unknown animation", "frames": []}
 
+        # An hourly animation plays at the text brightness, the same as on the
+        # clock, and is then encoded for the screen like everything else.
         brightness = settings.get("brightness")
-        scale = PREVIEW_FLOOR + (1.0 - PREVIEW_FLOOR) * brightness
         frames = []
         for grid, delay in gif.load_frames(path):
             frames.append({
                 "colors": [
-                    ["#%02x%02x%02x" % tuple(int(channel * scale) for channel in color)
+                    [to_screen([channel * brightness for channel in color])
                      for color in row]
                     for row in grid
                 ],
