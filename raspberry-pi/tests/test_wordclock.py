@@ -22,11 +22,13 @@ PROJECT = os.path.abspath(os.path.join(HERE, ".."))
 sys.path[:0] = [os.path.join(HERE, "stubs"), os.path.join(PROJECT, "src", "wordclock")]
 GIFS = os.path.join(PROJECT, "gifs")
 BACKGROUNDS = os.path.join(PROJECT, "backgrounds")
+WEATHER = os.path.join(PROJECT, "weather")
 
 import gif as gif_module
 import main as wordclock_main
 import themes
 import timekeeper
+import weather
 import webui
 from clock_display_hal import ClockDisplayHAL
 from gif import GifLibrary
@@ -55,6 +57,7 @@ def fresh_settings(library, **overrides):
 
 library = GifLibrary(GIFS)
 backgrounds = GifLibrary(BACKGROUNDS)
+weather_library = GifLibrary(WEATHER)
 WHEN = datetime(2026, 8, 11, 15, 17)          # "it is fifteen minutes past three"
 LATER = datetime(2026, 8, 11, 15, 40)         # "it is twenty minutes to four"
 
@@ -265,6 +268,137 @@ for name in offered:
           f"{len(frames)} frames")
 check("an hourly animation is not a valid background",
       "background" in plain.update({"background": "sun.gif"})[1])
+
+
+# --- weather ----------------------------------------------------------------
+
+print("\n-- weather --")
+
+# Every WMO code the service can send maps to something, or is deliberately
+# unmapped. A code that fell through silently would leave the face dark.
+for code, expected in [(0, "clear"), (1, "clear"), (2, "cloud"), (3, "cloud"),
+                       (45, "fog"), (48, "fog"), (51, "drizzle"), (55, "drizzle"),
+                       (61, "rain"), (65, "rain"), (80, "rain"), (82, "rain"),
+                       (71, "snow"), (77, "snow"), (86, "snow"),
+                       (95, "storm"), (99, "storm")]:
+    check(f"code {code} is {expected}", weather.condition_for(code) == expected,
+          weather.condition_for(code))
+check("an unknown code maps to nothing", weather.condition_for(7777) is None)
+check("a missing code maps to nothing", weather.condition_for(None) is None)
+
+check("clear has a night of its own",
+      weather.animation_for("clear", False) == "clear_night.gif")
+check("clear by day is the day one",
+      weather.animation_for("clear", True) == "clear.gif")
+check("rain is rain at any hour",
+      weather.animation_for("rain", False) == weather.animation_for("rain", True))
+check("drizzle borrows the rain animation",
+      weather.animation_for("drizzle") == "rain.gif")
+check("no condition means no animation", weather.animation_for(None) == "")
+check("a night label says so", weather.label_for("clear", False) == "Clear night")
+
+# Every animation a condition can ask for has to exist on disk, or the clock
+# would silently fall back for a weather it claims to support.
+wanted = set(weather.ANIMATIONS.values()) | set(weather.NIGHT_ANIMATIONS.values())
+on_disk = set(weather_library.names())
+check("every condition has its animation", wanted <= on_disk, wanted - on_disk)
+check("no weather animation is unreachable", on_disk <= wanted, on_disk - wanted)
+for name in sorted(on_disk):
+    frames = gif_module.load_frames(os.path.join(WEATHER, name))
+    moves = len({tuple(c for row in g for c in row) for g, _ in frames}) > 1
+    check(f"weather {name} decodes and animates", len(frames) > 1 and moves,
+          f"{len(frames)} frames")
+
+# The watch, driven off a stubbed reading so the tests never touch the network.
+weather_settings = fresh_settings(library, background_enabled=True,
+                                  background_source="weather")
+watch = weather.WeatherWatch(weather_settings)
+check("with no reading the watch offers nothing", watch.animation() == "")
+
+def fake_read(condition, is_day=True, temperature=12.0):
+    return lambda latitude, longitude: (condition, is_day, temperature)
+
+real_read = weather.read
+try:
+    weather_settings.update({"weather_latitude": 41.9, "weather_longitude": -87.6})
+    weather.read = fake_read("snow")
+    watch._check()
+    check("the watch follows the reading", watch.animation() == "snow.gif",
+          watch.animation())
+    check("the status reads back", watch.status()["label"] == "Snow",
+          watch.status())
+
+    # A dropped connection must not blank the face: the last good reading stands.
+    def explode(latitude, longitude):
+        raise weather.WeatherError("no route to host")
+    weather.read = explode
+    watch._check()
+    check("a failed fetch keeps the last animation", watch.animation() == "snow.gif",
+          watch.animation())
+    check("a failed fetch is reported", watch.status()["error"] == "no route to host",
+          watch.status())
+
+    # Which animation the clock actually draws.
+    weather_clock = WordClock(ClockDisplayHAL("D12", 1.0), weather_settings,
+                              backgrounds, weather_library, watch)
+    name, chosen = weather_clock._background_choice(weather_settings.snapshot())
+    check("the clock draws the weather animation", name == "snow.gif", name)
+    check("and takes it from the weather set", chosen is weather_library)
+
+    # With no reading at all it falls back rather than going dark.
+    weather_settings.update({"background": "aurora.gif"})
+    blank_watch = weather.WeatherWatch(weather_settings)
+    fallback_clock = WordClock(ClockDisplayHAL("D12", 1.0), weather_settings,
+                               backgrounds, weather_library, blank_watch)
+    name, chosen = fallback_clock._background_choice(weather_settings.snapshot())
+    check("without a reading it falls back to the chosen animation",
+          name == "aurora.gif" and chosen is backgrounds, name)
+
+    check("weather makes the display animated",
+          themes.is_animated(dict(weather_settings.snapshot(), background="")))
+finally:
+    weather.read = real_read
+
+# A postcode is interpolated into a URL, so anything that is not one is refused
+# before it gets there.
+for bad in ("../../etc/passwd", "60601?x=1", "a" * 11, "60601/../"):
+    _, errors = weather_settings.update({"weather_zip": bad})
+    check(f"postcode {bad!r} is refused", "weather_zip" in errors, errors)
+applied, _ = weather_settings.update({"weather_zip": " 60601 "})
+check("a postcode is trimmed", applied.get("weather_zip") == "60601", applied)
+_, errors = weather_settings.update({"background_source": "guesswork"})
+check("an unknown background source is refused", "background_source" in errors)
+applied, _ = weather_settings.update({"weather_latitude": 200})
+check("latitude is clamped to the globe", applied["weather_latitude"] == 90.0,
+      applied)
+applied, _ = weather_settings.update({"weather_latitude": None})
+check("latitude can be cleared", applied["weather_latitude"] is None, applied)
+
+# The flash has to survive brightness scaling, which is why the normalisation
+# is per animation rather than per frame.
+storm_frames = gif_module.load_frames(os.path.join(WEATHER, "storm.gif"))
+frame_peaks = [max(max(c) for row in g for c in row) for g, _ in storm_frames]
+check("the storm has bright frames and dark ones",
+      max(frame_peaks) - min(frame_peaks) > 40,
+      f"{min(frame_peaks)}-{max(frame_peaks)}")
+flash_settings = fresh_settings(library, background_enabled=True,
+                                background_source="weather",
+                                background_brightness=1.0)
+flash_watch = weather.WeatherWatch(flash_settings)
+real_read = weather.read
+try:
+    flash_settings.update({"weather_latitude": 41.9, "weather_longitude": -87.6})
+    weather.read = fake_read("storm")
+    flash_watch._check()
+    flash_clock = WordClock(ClockDisplayHAL("D12", 1.0), flash_settings,
+                            backgrounds, weather_library, flash_watch)
+    values = flash_settings.snapshot()
+    drawn = [max(max(c) for c in flash_clock.background_frame(values, t * 0.13))
+             for t in range(60)]
+    check("the flash still reads brighter than the sky",
+          max(drawn) - min(drawn) > 40, f"{min(drawn)}-{max(drawn)}")
+finally:
+    weather.read = real_read
 
 
 # --- crossfade --------------------------------------------------------------

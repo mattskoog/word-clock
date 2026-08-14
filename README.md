@@ -19,6 +19,7 @@ word-clock-main/
 └── raspberry-pi/
     ├── gifs/                       # thirteen animations played on the hour
     ├── backgrounds/                # five animations played behind the time
+    ├── weather/                    # seven chosen by live conditions
     ├── tests/
     │   └── test_wordclock.py       # runs off-hardware against stubbed LEDs
     ├── tools/
@@ -58,6 +59,9 @@ Once installed, the Raspberry Pi build offers:
   comes back. Choose them per hour and preview them without waiting
 - **Background animations**: a separate set of five that play quietly behind the
   time — aurora, drift, embers, nebula and ripple
+- **Weather backgrounds**: point the clock at a zip code and it picks the
+  background from live conditions — clear, cloud, fog, rain, snow, storm, and a
+  starfield after dark. No API key needed
 - **Correct daylight saving time**: pick a time zone from the dropdown or let it
   detect your device's, and DST is applied from the tz database
 

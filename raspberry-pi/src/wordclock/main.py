@@ -9,6 +9,7 @@ import themes
 import timekeeper
 import webui
 from clock_display_hal import ClockDisplayHAL
+import weather
 from gif import GifLibrary
 from settings import Settings
 from word_clock import WordClock
@@ -18,6 +19,7 @@ PROJECT_DIRECTORY = os.path.abspath(os.path.join(PACKAGE_DIRECTORY, "..", ".."))
 DEFAULT_CONFIG_PATH = os.path.join(PROJECT_DIRECTORY, "wordclock.json")
 DEFAULT_GIF_DIRECTORY = os.path.join(PROJECT_DIRECTORY, "gifs")
 DEFAULT_BACKGROUND_DIRECTORY = os.path.join(PROJECT_DIRECTORY, "backgrounds")
+DEFAULT_WEATHER_DIRECTORY = os.path.join(PROJECT_DIRECTORY, "weather")
 
 ANIMATED_TICK = 0.1  # redraw interval while an animated theme is running
 IDLE_TICK = 0.5
@@ -103,6 +105,9 @@ def main(arguments):
     # Backgrounds are a separate set: they play behind the time rather than
     # taking the face, so they are kept out of the hourly picker entirely.
     background_library = GifLibrary(arguments.background_dir)
+    # The weather set is picked by conditions, never by hand, so it is not
+    # offered to Settings for validation the way the other two are.
+    weather_library = GifLibrary(arguments.weather_dir)
     settings = Settings(arguments.config, gif_names=gif_library.names,
                         background_names=background_library.names)
     if startup_changes:
@@ -112,17 +117,22 @@ def main(arguments):
 
     # The driver stays at full: brightness is applied per layer in software.
     clock_display_hal = ClockDisplayHAL(arguments.pin, 1.0)
-    word_clock = WordClock(clock_display_hal, settings, background_library)
+    weather_watch = weather.WeatherWatch(settings)
+    word_clock = WordClock(clock_display_hal, settings, background_library,
+                           weather_library, weather_watch)
+    # Its own thread: a slow link must never hold up the clock face.
+    weather_watch.start()
 
     print(f"Config: {arguments.config}")
     print(f"Animations: {gif_directory} ({len(gif_library.names())} found)")
     print(f"Backgrounds: {arguments.background_dir} ({len(background_library.names())} found)")
+    print(f"Weather: {arguments.weather_dir} ({len(weather_library.names())} found)")
     print(f"Time zone: {settings.get('timezone') or 'system default'} "
           f"({timekeeper.describe(word_clock.now())})")
 
     if not arguments.no_web:
         webui.start(settings, gif_library, background_library, word_clock,
-                    arguments.web_host, arguments.web_port)
+                    arguments.web_host, arguments.web_port, weather_watch)
 
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     try:
@@ -143,6 +153,8 @@ if __name__ == "__main__":
                         help="IANA time zone, e.g. Europe/Warsaw. Overrides the saved setting.")
     parser.add_argument("--gif-dir", type=str, default=DEFAULT_GIF_DIRECTORY,
                         help="Directory of animations to play on the hour.")
+    parser.add_argument("--weather-dir", type=str, default=DEFAULT_WEATHER_DIRECTORY,
+                        help="directory of animations chosen by the weather")
     parser.add_argument("--background-dir", type=str, default=DEFAULT_BACKGROUND_DIRECTORY,
                         help="Directory of animations that play behind the time.")
     parser.add_argument("--gif", type=str, default=None,

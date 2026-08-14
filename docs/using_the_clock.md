@@ -198,6 +198,34 @@ scp my-animation.gif pi@wordclock.local:~/word-clock/raspberry-pi/gifs/
 - Fully transparent pixels are shown as black
 - New files are picked up without restarting the service
 
+## Weather backgrounds
+
+Instead of picking a background yourself, the clock can read the weather at your
+zip code and choose one. Set **Behind the time, play** to *Whatever the weather
+is doing*, enter a zip code and press **Look up**.
+
+The lookup runs once, when you press the button, and stores the coordinates. The
+running clock then only ever calls the weather service — the zip code service is
+never a live dependency, so it cannot break the clock later.
+
+Conditions are checked every 15 minutes, which is how often the forecast itself
+is republished; polling faster spends the Pi's network for nothing. There are
+seven animations, one per condition, described in `raspberry-pi/weather/`.
+
+**Nothing needs an API key.** Conditions come from
+[Open-Meteo](https://open-meteo.com), which serves national weather service
+output rather than a model of its own — for a US location that is NOAA's HRRR at
+3km. Zip codes are resolved by [Zippopotam](https://zippopotam.us). Both are
+free and keyless, so no secret ever has to live on the Pi.
+
+If the weather cannot be read — no network, or the service is down — the clock
+keeps the last reading rather than blanking, and if it has never managed a
+reading at all it falls back to whichever background you picked by hand. The
+face never goes dark because the internet did.
+
+The interface shows the current reading under the zip code, so you can tell the
+difference between "it is cloudy" and "the clock has not managed to look".
+
 ## Time zone and daylight saving
 
 The Raspberry Pi has no battery-backed clock, so it gets the time from the

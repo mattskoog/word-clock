@@ -32,13 +32,19 @@ WORD_LABELS = {
 
 
 class WordClock:
-    def __init__(self, clock_display_hal, settings, background_library=None):
+    def __init__(self, clock_display_hal, settings, background_library=None,
+                 weather_library=None, weather_watch=None):
         self.clock_display_hal = clock_display_hal
         self.settings = settings
         # Optional: without it there is simply no background layer.
         self.background_library = background_library
+        # The weather set is kept apart from the pickable backgrounds, the same
+        # way backgrounds are kept apart from the hourly animations.
+        self.weather_library = weather_library
+        self.weather_watch = weather_watch
         self._background_name = None
         self._background_frames = None
+        self._background_peak = 0
         self._last_signature = None
         self._last_frame = None  # what the LEDs are showing, for the crossfade
         self._paused_for = 0.0  # animation time skipped while crossfading
@@ -123,16 +129,41 @@ class WordClock:
         if cleared:
             self._last_frame = [(0, 0, 0)] * ClockDisplayHAL.NUM_LEDS
 
-    def _background_for(self, name):
-        """Decoded frames for the background animation, loaded once per name."""
-        if name != self._background_name:
-            self._background_name = name
+    def _background_for(self, name, library):
+        """(frames, peak) for an animation, decoded once per name.
+
+        The peak is taken across every frame rather than per frame. Scaling
+        each frame to its own brightest pixel would hold the whole animation at
+        a constant level, which flattens anything that is meant to vary over
+        time - a lightning flash would come out no brighter than the dark
+        frames around it.
+        """
+        if (name, library) != self._background_name:
+            self._background_name = (name, library)
             self._background_frames = []
-            if name and self.background_library:
-                path = self.background_library.path_for(name)
-                if path:
-                    self._background_frames = gif.load_frames(path)
-        return self._background_frames
+            self._background_peak = 0
+            path = library.path_for(name) if (name and library) else None
+            if path:
+                self._background_frames = gif.load_frames(path)
+                self._background_peak = max(
+                    (max(color) for grid, _ in self._background_frames
+                     for row in grid for color in row),
+                    default=0,
+                )
+        return self._background_frames, self._background_peak
+
+    def _background_choice(self, current):
+        """Which animation should be behind the time, and where it lives.
+
+        Weather picks the animation when that is the chosen source; if it has
+        no reading yet - no network, or the very first tick after a restart -
+        this falls back to the manually chosen one rather than going dark.
+        """
+        if current.get("background_source") == "weather" and self.weather_watch:
+            name = self.weather_watch.animation()
+            if name:
+                return name, self.weather_library
+        return current.get("background", ""), self.background_library
 
     def background_frame(self, current, elapsed):
         """The background layer as one color per LED, already dimmed.
@@ -146,8 +177,9 @@ class WordClock:
         blank = [(0, 0, 0)] * ClockDisplayHAL.NUM_LEDS
         if not current.get("background_enabled"):
             return blank
-        frames = self._background_for(current.get("background", ""))
-        if not frames:
+        name, library = self._background_choice(current)
+        frames, peak = self._background_for(name, library)
+        if not frames or not peak:
             return blank
 
         # Walk the animation's own frame delays so it plays at its authored
@@ -161,11 +193,8 @@ class WordClock:
                 break
             position -= delay
 
-        # Normalise on the animation's own brightest pixel so every background
+        # Normalised on the animation's brightest pixel so every background
         # sits at the same level for a given setting, whatever it was drawn at.
-        peak = max((max(color) for row in grid for color in row), default=0)
-        if not peak:
-            return blank
         scale = (255.0 * current.get("background_brightness", 0.25)) / peak
 
         for y, row in enumerate(grid):

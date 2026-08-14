@@ -14,6 +14,7 @@ import themes
 import timekeeper
 
 GIF_MODES = ("random", "fixed", "hourly")
+BACKGROUND_SOURCES = ("animation", "weather")
 HOURS = tuple(str(hour) for hour in range(1, 13))
 
 DEFAULTS = {
@@ -37,6 +38,16 @@ DEFAULTS = {
     "background_enabled": False,
     "background": "",
     "background_brightness": 0.25,
+    # Where the background comes from: an animation picked by hand, or live
+    # weather. The hand-picked one is remembered either way, and is what the
+    # clock falls back to when the weather cannot be read.
+    "background_source": "animation",
+    # Resolved once when the zip is saved, so the running clock only ever has
+    # to call the weather service, never the postcode lookup.
+    "weather_zip": "",
+    "weather_place": "",
+    "weather_latitude": None,
+    "weather_longitude": None,
     # Which animation plays at each hour, "1" through "12". An empty value
     # means "pick a random one for that hour".
     "hour_gifs": {hour: "" for hour in HOURS},
@@ -83,6 +94,20 @@ def _color(value, key):
         except (TypeError, ValueError):
             raise ValidationError(f"{key} must contain numbers between 0 and 255")
     return channels
+
+
+def _postcode(value, key):
+    """A postcode, kept to what a postcode can contain.
+
+    This is interpolated into a URL, so anything that is not a plain code is
+    refused here rather than being escaped and sent on to the lookup service.
+    """
+    text = str(value or "").strip().upper()
+    if not text:
+        return ""
+    if len(text) > 10 or not all(c.isalnum() or c in " -" for c in text):
+        raise ValidationError(f"{key} must be a postcode, e.g. 60601")
+    return text
 
 
 def _choice(value, key, allowed):
@@ -213,6 +238,17 @@ class Settings:
             return _choice(value, key, themes.names())
         if key == "gif_mode":
             return _choice(value, key, GIF_MODES)
+        if key == "background_source":
+            return _choice(value, key, BACKGROUND_SOURCES)
+        if key == "weather_zip":
+            return _postcode(value, key)
+        if key == "weather_place":
+            return str(value or "").strip()[:80]
+        if key in ("weather_latitude", "weather_longitude"):
+            if value is None or value == "":
+                return None
+            limit = 90.0 if key == "weather_latitude" else 180.0
+            return round(_number(value, key, -limit, limit), 4)
         if key == "background_brightness":
             return round(_number(value, key, 0.0, 1.0), 3)
         if key == "background":

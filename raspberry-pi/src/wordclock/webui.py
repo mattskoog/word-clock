@@ -15,8 +15,10 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import gif
+import settings as settings_module
 import themes
 import timekeeper
+import weather
 from clock_display_hal import ClockDisplayHAL
 from word_clock import CROSSFADE_SECONDS
 
@@ -346,9 +348,31 @@ PAGE_TEMPLATE = """<!doctype html>
     <div id="background-controls">
       <div class="row" style="margin-top:14px">
         <div style="flex:1">
+          <label for="background-source">Behind the time, play</label>
+          <select id="background-source">
+            <option value="animation">A single animation</option>
+            <option value="weather">Whatever the weather is doing</option>
+          </select>
+        </div>
+      </div>
+      <div class="row" id="background-name-row">
+        <div style="flex:1">
           <label for="background">Select animation</label>
           <select id="background"></select>
         </div>
+      </div>
+      <div id="weather-rows">
+        <div class="row">
+          <div style="flex:1">
+            <label for="weather-zip">Zip code</label>
+            <div class="inline">
+              <input type="text" id="weather-zip" inputmode="numeric"
+                     autocomplete="postal-code" placeholder="60601">
+              <button id="weather-lookup">Look up</button>
+            </div>
+          </div>
+        </div>
+        <div class="hint" id="weather-status"></div>
       </div>
       <div class="row">
         <div style="flex:1">
@@ -357,8 +381,9 @@ PAGE_TEMPLATE = """<!doctype html>
         </div>
         <div class="value" id="background-brightness-value"></div>
       </div>
-      <div class="hint">Plays continuously behind the time, dimmed so the words
-        stay readable. The hourly animation still takes the whole face.</div>
+      <div class="hint" id="background-hint">Plays continuously behind the time,
+        dimmed so the words stay readable. The hourly animation still takes the
+        whole face.</div>
     </div>
   </section>
 
@@ -608,6 +633,19 @@ function renderBackground() {
 
   el('background-enabled').checked = !!draft.background_enabled;
   el('background-controls').className = draft.background_enabled ? '' : 'hidden';
+
+  var source = draft.background_source || 'animation';
+  if (document.activeElement !== el('background-source')) {
+    el('background-source').value = source;
+  }
+  el('background-name-row').className = source === 'weather' ? 'row hidden' : 'row';
+  el('weather-rows').className = source === 'weather' ? '' : 'hidden';
+  el('background-hint').textContent = source === 'weather'
+    ? 'Checked every 15 minutes. If the weather cannot be read the chosen '
+      + 'animation plays instead, so the face never goes dark.'
+    : 'Plays continuously behind the time, dimmed so the words stay readable. '
+      + 'The hourly animation still takes the whole face.';
+  if (source === 'weather') renderWeather();
   if (document.activeElement !== el('background-brightness')) {
     el('background-brightness').value = draft.background_brightness;
   }
@@ -778,6 +816,76 @@ el('background-enabled').onchange = function () {
   changed();
 };
 el('background').onchange = function () { draft.background = this.value; changed(); };
+el('background-source').onchange = function () {
+  draft.background_source = this.value;
+  changed();
+  renderBackground();
+};
+el('weather-zip').oninput = function () {
+  draft.weather_zip = this.value;
+  // The coordinates belong to the old zip until this one is looked up, so
+  // they are cleared rather than left to point somewhere else.
+  draft.weather_latitude = null;
+  draft.weather_longitude = null;
+  draft.weather_place = '';
+  changed();
+  renderWeather();
+};
+el('weather-lookup').onclick = function () { lookUpZip(); };
+el('weather-zip').onkeydown = function (event) {
+  if (event.key === 'Enter') { event.preventDefault(); lookUpZip(); }
+};
+
+function lookUpZip() {
+  var zip = (draft.weather_zip || '').trim();
+  if (!zip) { setWeatherStatus('Enter a zip code.', true); return; }
+  var button = el('weather-lookup');
+  button.disabled = true;
+  setWeatherStatus('Looking up ' + zip + '\\u2026');
+  api('/api/weather/lookup', { zip: zip }).then(function (data) {
+    button.disabled = false;
+    if (data.error) { setWeatherStatus(data.error, true); return; }
+    draft.weather_place = data.place || '';
+    draft.weather_latitude = data.latitude;
+    draft.weather_longitude = data.longitude;
+    changed();
+    renderWeather();
+  }).catch(function () {
+    button.disabled = false;
+    setWeatherStatus('Lookup failed.', true);
+  });
+}
+
+function setWeatherStatus(message, isError) {
+  var status = el('weather-status');
+  status.textContent = message;
+  status.className = isError ? 'error' : 'hint';
+}
+
+function renderWeather() {
+  if (document.activeElement !== el('weather-zip')) {
+    el('weather-zip').value = draft.weather_zip || '';
+  }
+  // A location that has not been resolved yet is the thing standing between
+  // the user and a working background, so it is what the line talks about.
+  if (draft.weather_latitude === null || draft.weather_latitude === undefined) {
+    setWeatherStatus(draft.weather_zip
+      ? 'Press Look up to find ' + draft.weather_zip + '.'
+      : 'Enter a zip code to pick the background from local weather.');
+    return;
+  }
+  var where = draft.weather_place || 'that location';
+  var reading = state.weather || {};
+  if (reading.error) {
+    setWeatherStatus(where + ' \\u2014 ' + reading.error, true);
+  } else if (reading.label) {
+    var degrees = reading.temperature_c === null || reading.temperature_c === undefined
+      ? '' : ', ' + Math.round(reading.temperature_c * 9 / 5 + 32) + '\\u00b0F';
+    setWeatherStatus(where + ' \\u2014 ' + reading.label + degrees + '.');
+  } else {
+    setWeatherStatus(where + ' \\u2014 waiting for the first reading\\u2026');
+  }
+}
 el('background-brightness').oninput = function () {
   draft.background_brightness = Number(this.value);
   changed();
@@ -1007,7 +1115,24 @@ def _face_markup():
 PAGE = PAGE_TEMPLATE.replace("<!--FACE-->", _face_markup())
 
 
-def _make_handler(settings, gif_library, background_library, word_clock):
+def _make_handler(settings, gif_library, background_library, word_clock,
+                  weather_watch=None):
+
+    def build_location(postcode):
+        """Resolve a postcode for the browser, without saving anything.
+
+        The coordinates go into the draft and only reach the clock when Save
+        is pressed, like every other setting.
+        """
+        try:
+            postcode = settings_module._postcode(postcode, "zip")
+        except settings_module.ValidationError as error:
+            return {"error": str(error)}
+        try:
+            latitude, longitude, place = weather.locate(postcode)
+        except weather.WeatherError as error:
+            return {"error": str(error)}
+        return {"place": place, "latitude": latitude, "longitude": longitude}
 
     def build_state(errors=None):
         current = settings.snapshot()
@@ -1018,6 +1143,7 @@ def _make_handler(settings, gif_library, background_library, word_clock):
             "gifs": gif_library.names(),
             "background_gifs": background_library.names(),
             "gif_directory": gif_library.directory,
+            "weather": weather_watch.status() if weather_watch else {},
             "crossfade": CROSSFADE_SECONDS,
             "clock": {
                 "time": timekeeper.describe(moment),
@@ -1142,7 +1268,14 @@ def _make_handler(settings, gif_library, background_library, word_clock):
                 return
 
             if self.path == "/api/settings":
-                _, errors = settings.update(body)
+                applied, errors = settings.update(body)
+                # After the write, never before: the watch reads a snapshot as
+                # soon as it wakes, and would otherwise see the old location
+                # and go back to sleep for the whole refresh interval.
+                if weather_watch is not None and any(
+                        key.startswith("weather_") or key == "background_source"
+                        for key in applied):
+                    weather_watch.refresh_now()
                 self._send_json(build_state(errors))
             elif self.path == "/api/preview":
                 self._send_json(build_preview(body))
@@ -1151,6 +1284,8 @@ def _make_handler(settings, gif_library, background_library, word_clock):
                 self._send_json(build_state())
             elif self.path == "/api/gif/frames":
                 self._send_json(build_animation(body.get("name") or ""))
+            elif self.path == "/api/weather/lookup":
+                self._send_json(build_location(body.get("zip") or ""))
             elif self.path == "/api/timezone/locate":
                 self._locate_timezone(body)
             else:
@@ -1177,10 +1312,13 @@ def _make_handler(settings, gif_library, background_library, word_clock):
 
 
 def start(settings, gif_library, background_library, word_clock,
-          host="0.0.0.0", port=8080):
+          host="0.0.0.0", port=8080, weather_watch=None):
     """Start the web server on a daemon thread. Returns the server, or None."""
     try:
-        server = ThreadingHTTPServer((host, port), _make_handler(settings, gif_library, background_library, word_clock))
+        server = ThreadingHTTPServer(
+            (host, port),
+            _make_handler(settings, gif_library, background_library, word_clock,
+                          weather_watch))
     except OSError as error:
         print(f"Web interface disabled, could not listen on {host}:{port}: {error}")
         return None

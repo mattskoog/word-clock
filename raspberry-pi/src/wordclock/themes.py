@@ -238,6 +238,11 @@ def apply_sparkle(color, led, elapsed, speed, brightness=0.5):
 
 def is_animated(settings):
     """True when the display has to be redrawn continuously."""
-    return (get(settings["theme"]).animated
-            or bool(settings.get("sparkle"))
-            or bool(settings.get("background_enabled") and settings.get("background")))
+    if get(settings["theme"]).animated or settings.get("sparkle"):
+        return True
+    if not settings.get("background_enabled"):
+        return False
+    # On weather the animation is chosen for us, so there is something moving
+    # back there whether or not a background was ever picked by hand.
+    return (settings.get("background_source") == "weather"
+            or bool(settings.get("background")))
