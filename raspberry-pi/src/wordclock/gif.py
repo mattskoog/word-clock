@@ -32,6 +32,9 @@ class GifLibrary:
             entry
             for entry in os.listdir(self.directory)
             if entry.lower().endswith(SUPPORTED_EXTENSIONS)
+            # A leading underscore keeps a file in the folder but out of the
+            # pickers, so one can be shelved and brought back with a rename.
+            and not entry.startswith("_")
             and os.path.isfile(os.path.join(self.directory, entry))
         ]
         return sorted(found)
@@ -124,14 +127,17 @@ def load_frames(gif_path, max_frames=MAX_FRAMES, background_color=(0, 0, 0)):
     return frames
 
 
-def _show(grid, clock_display_hal):
+def _show(grid, clock_display_hal, scale=1.0):
     for y, row in enumerate(grid):
         for x, color in enumerate(row):
+            if scale != 1.0:
+                color = tuple(int(channel * scale) for channel in color)
             clock_display_hal.set_pixel(x, y, color)
     clock_display_hal.show()
 
 
-def play(gif_path, clock_display_hal, duration=6.0, background_color=(0, 0, 0), should_stop=None):
+def play(gif_path, clock_display_hal, duration=6.0, background_color=(0, 0, 0),
+         should_stop=None, scale=1.0):
     """Play an animation for `duration` seconds, looping if it is shorter.
 
     Returns True if it played, False if the file could not be opened.
@@ -147,7 +153,7 @@ def play(gif_path, clock_display_hal, duration=6.0, background_color=(0, 0, 0), 
         if should_stop is not None and should_stop():
             break
         grid, delay = frames[index % len(frames)]
-        _show(grid, clock_display_hal)
+        _show(grid, clock_display_hal, scale)
         time.sleep(min(delay, max(0.0, deadline - time.monotonic())))
         index += 1
     return True

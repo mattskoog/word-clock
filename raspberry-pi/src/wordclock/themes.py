@@ -240,4 +240,4 @@ def is_animated(settings):
     """True when the display has to be redrawn continuously."""
     return (get(settings["theme"]).animated
             or bool(settings.get("sparkle"))
-            or bool(settings.get("background")))
+            or bool(settings.get("background_enabled") and settings.get("background")))

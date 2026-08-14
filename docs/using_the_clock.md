@@ -30,8 +30,9 @@ From there you can:
 | Theme animation speed | How fast a moving theme travels. Shown only for Rainbow and Color cycle |
 | Letter shimmer | Twinkle on top of any theme, see below |
 | Shimmer speed | How fast the shimmer twinkles, independent of the theme. Shown when the shimmer is on |
-| Animation behind the time | A background animation, dimmed so the time stays readable. See below |
-| Background brightness | How bright the background is relative to the time. Shown when one is set |
+| Background animations on/off | Whether an animation plays behind the time |
+| Select animation | Which background plays. Shown when backgrounds are on |
+| Animation brightness | How bright the background is relative to the time |
 | Cuckoo clock on/off | Whether an animation plays at the top of the hour |
 | On the hour, play | A random animation, a single animation, or a specific animation each hour |
 | Per-hour list | With **A specific animation each hour**, choose one for each of the twelve hours |
@@ -117,22 +118,43 @@ Turning it on makes the display animated whatever theme is selected.
 Separate from the hourly cuckoo: a background animation plays continuously
 *behind* the time rather than taking over the face. The lit words are drawn over
 it at full strength, so the time stays readable while the animation moves around
-it.
+it. Switch it on in the interface and pick one.
+
+The two sets are kept apart. Backgrounds live in `raspberry-pi/backgrounds/` and
+the hourly animations in `raspberry-pi/gifs/`; neither appears in the other's
+picker. Five backgrounds ship with the clock:
+
+| | |
+| --- | --- |
+| `aurora` | slow bands of green and violet |
+| `drift` | a soft field of blues and teals |
+| `embers` | warm sparks rising |
+| `nebula` | a magenta and indigo cloud, turning slowly |
+| `ripple` | overlapping rings, like rain on water |
+
+They are built for the job: even coverage, slow movement and a seamless loop,
+since a background has no beginning or end to hide.
+
+A filename beginning with `_` is kept in the folder but left out of the picker,
+which is how an animation is retired without deleting it. The same goes for the
+hourly ones.
 
 **Background brightness** is measured against the time, not against full scale.
 At 25% the animation's brightest pixel is a quarter as bright as the brightest
 lit letter, and that ratio holds whichever theme is running - so a dark theme
 like the Night phase is not swamped by a vivid animation behind it.
 
-Any animation in `raspberry-pi/gifs/` can be used. Setting one makes the display
-animated, so it redraws continuously.
+Drop your own files into `raspberry-pi/backgrounds/` and they appear in the
+picker too. Setting a background makes the display animated, so it redraws
+continuously.
 
 ## Animations
 
-Twelve animations ship with the clock — `sun`, `moon`, `star`, `smiley`,
-`rocket`, `snow`, `rain`, `fireworks`, `swirl`, `wave`, `confetti` and the
-original `heart_art_small` — one for each hour of the dial. One plays at the top
-of every hour and then the clock goes back to showing the time.
+Thirteen animations ship with the clock — `sun`, `moon`, `star`, `smiley`,
+`rocket`, `snow`, `rain`, `matrix`, `fireworks`, `swirl`, `wave`, `confetti` and
+the original `heart_art_small` — one for each hour of the dial, plus a spare to
+choose between. One plays at the top of every hour and then the clock goes back
+to showing the time.
 
 ### Choosing one per hour
 
@@ -234,6 +256,7 @@ than crashing the clock.
   "gif_mode": "random",
   "gif_name": "",
   "gif_duration": 6.0,
+  "background_enabled": false,
   "background": "",
   "background_brightness": 0.25,
   "hour_gifs": {

@@ -17,6 +17,7 @@ PACKAGE_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIRECTORY = os.path.abspath(os.path.join(PACKAGE_DIRECTORY, "..", ".."))
 DEFAULT_CONFIG_PATH = os.path.join(PROJECT_DIRECTORY, "wordclock.json")
 DEFAULT_GIF_DIRECTORY = os.path.join(PROJECT_DIRECTORY, "gifs")
+DEFAULT_BACKGROUND_DIRECTORY = os.path.join(PROJECT_DIRECTORY, "backgrounds")
 
 ANIMATED_TICK = 0.1  # redraw interval while an animated theme is running
 IDLE_TICK = 0.5
@@ -32,7 +33,8 @@ def run(clock_display_hal, word_clock, settings, gif_library):
         current = settings.snapshot()
 
         if current["brightness"] != last_brightness:
-            clock_display_hal.set_brightness(current["brightness"])
+            # Applied to the words when the frame is built, not by the driver,
+            # so it dims the time without touching the background.
             last_brightness = current["brightness"]
             word_clock.invalidate()
 
@@ -71,6 +73,9 @@ def run(clock_display_hal, word_clock, settings, gif_library):
                 clock_display_hal,
                 duration=current["gif_duration"],
                 should_stop=lambda: not settings.get("display_on"),
+                # The hourly animation takes the whole face, so it follows the
+                # display brightness rather than running at full.
+                scale=current["brightness"],
             )
             clock_display_hal.clear_pixels(show=False)
             word_clock.invalidate(cleared=True)
@@ -95,22 +100,29 @@ def main(arguments):
         startup_changes["timezone"] = arguments.timezone
 
     gif_library = GifLibrary(gif_directory)
-    settings = Settings(arguments.config, gif_names=gif_library.names)
+    # Backgrounds are a separate set: they play behind the time rather than
+    # taking the face, so they are kept out of the hourly picker entirely.
+    background_library = GifLibrary(arguments.background_dir)
+    settings = Settings(arguments.config, gif_names=gif_library.names,
+                        background_names=background_library.names)
     if startup_changes:
         _, errors = settings.update(startup_changes)
         for key, message in errors.items():
             print(f"Ignoring --{key.replace('_', '-')}: {message}")
 
-    clock_display_hal = ClockDisplayHAL(arguments.pin, settings.get("brightness"))
-    word_clock = WordClock(clock_display_hal, settings, gif_library)
+    # The driver stays at full: brightness is applied per layer in software.
+    clock_display_hal = ClockDisplayHAL(arguments.pin, 1.0)
+    word_clock = WordClock(clock_display_hal, settings, background_library)
 
     print(f"Config: {arguments.config}")
     print(f"Animations: {gif_directory} ({len(gif_library.names())} found)")
+    print(f"Backgrounds: {arguments.background_dir} ({len(background_library.names())} found)")
     print(f"Time zone: {settings.get('timezone') or 'system default'} "
           f"({timekeeper.describe(word_clock.now())})")
 
     if not arguments.no_web:
-        webui.start(settings, gif_library, word_clock, arguments.web_host, arguments.web_port)
+        webui.start(settings, gif_library, background_library, word_clock,
+                    arguments.web_host, arguments.web_port)
 
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     try:
@@ -131,6 +143,8 @@ if __name__ == "__main__":
                         help="IANA time zone, e.g. Europe/Warsaw. Overrides the saved setting.")
     parser.add_argument("--gif-dir", type=str, default=DEFAULT_GIF_DIRECTORY,
                         help="Directory of animations to play on the hour.")
+    parser.add_argument("--background-dir", type=str, default=DEFAULT_BACKGROUND_DIRECTORY,
+                        help="Directory of animations that play behind the time.")
     parser.add_argument("--gif", type=str, default=None,
                         help="Play one specific animation file (legacy single-GIF mode).")
     parser.add_argument("--config", type=str, default=DEFAULT_CONFIG_PATH,

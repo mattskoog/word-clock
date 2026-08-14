@@ -1,13 +1,15 @@
 # Animations
 
-Twelve animations ship with the clock, one for each hour of the dial:
+Thirteen animations ship with the clock — one for each hour of the dial, plus a
+spare:
 
 | | | |
 | --- | --- | --- |
 | `confetti` | `fireworks` | `heart_art_small` |
-| `moon` | `rain` | `rocket` |
-| `smiley` | `snow` | `star` |
-| `sun` | `swirl` | `wave` |
+| `matrix` | `moon` | `rain` |
+| `rocket` | `smiley` | `snow` |
+| `star` | `sun` | `swirl` |
+| `wave` | | |
 
 One plays at the top of every hour, then the clock goes back to showing the
 time. Pick which one plays when in the web interface at `http://<your-pi>:8080`,

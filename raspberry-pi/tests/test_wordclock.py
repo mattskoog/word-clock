@@ -21,6 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PROJECT = os.path.abspath(os.path.join(HERE, ".."))
 sys.path[:0] = [os.path.join(HERE, "stubs"), os.path.join(PROJECT, "src", "wordclock")]
 GIFS = os.path.join(PROJECT, "gifs")
+BACKGROUNDS = os.path.join(PROJECT, "backgrounds")
 
 import gif as gif_module
 import main as wordclock_main
@@ -43,7 +44,8 @@ def check(name, condition, detail=""):
 
 def fresh_settings(library, **overrides):
     settings = Settings(os.path.join(tempfile.mkdtemp(), "wordclock.json"),
-                        gif_names=library.names)
+                        gif_names=library.names,
+                        background_names=backgrounds.names)
     base = {"theme": "solid", "color": [255, 255, 255], "sparkle": False,
             "brightness": 1.0, "timezone": "", "display_on": True, "background": ""}
     base.update(overrides)
@@ -52,6 +54,7 @@ def fresh_settings(library, **overrides):
 
 
 library = GifLibrary(GIFS)
+backgrounds = GifLibrary(BACKGROUNDS)
 WHEN = datetime(2026, 8, 11, 15, 17)          # "it is fifteen minutes past three"
 LATER = datetime(2026, 8, 11, 15, 40)         # "it is twenty minutes to four"
 
@@ -82,7 +85,7 @@ check("every word spells itself on the face", not misspelled, misspelled)
 
 settings = fresh_settings(library)
 hal = ClockDisplayHAL("D12", 1.0)
-clock = WordClock(hal, settings, library)
+clock = WordClock(hal, settings, backgrounds)
 
 for moment, expected in [
     (datetime(2026, 8, 11, 15, 0), "it is three o'clock"),
@@ -118,7 +121,7 @@ check("all five phases are reachable",
 
 gradient = fresh_settings(library, theme="gradient", color=[255, 0, 0],
                           secondary_color=[0, 0, 255])
-gradient_clock = WordClock(ClockDisplayHAL("D12", 1.0), gradient, library)
+gradient_clock = WordClock(ClockDisplayHAL("D12", 1.0), gradient, backgrounds)
 by_word = dict(gradient_clock.word_colors(gradient.snapshot(),
                                           datetime(2026, 8, 11, 15, 0)))
 check("gradient runs top to bottom", by_word["IT"] == (255, 0, 0)
@@ -129,7 +132,7 @@ check("gradient runs top to bottom", by_word["IT"] == (255, 0, 0)
 
 print("\n-- letter shimmer --")
 sparkly = fresh_settings(library, sparkle=True, shimmer_speed=0.05)
-shimmer_clock = WordClock(ClockDisplayHAL("D12", 1.0), sparkly, library)
+shimmer_clock = WordClock(ClockDisplayHAL("D12", 1.0), sparkly, backgrounds)
 frame = shimmer_clock.frame_for(sparkly.snapshot(), WHEN, elapsed=100.0)
 minutes = ClockDisplayHAL.WORDS_TO_LEDS["MINUTES"]
 levels = [frame[i][0] for i in range(minutes[0], minutes[1] + 1)]
@@ -164,11 +167,12 @@ check("shimmer keeps the hue", abs(200 / 100 - brightest[0] / brightest[1]) < 0.
 
 print("\n-- background animations --")
 plain = fresh_settings(library)
-bg_clock = WordClock(ClockDisplayHAL("D12", 1.0), plain, library)
+bg_clock = WordClock(ClockDisplayHAL("D12", 1.0), plain, backgrounds)
 without = bg_clock.frame_for(plain.snapshot(), WHEN)
 word_leds = {i for i, color in enumerate(without) if color != (0, 0, 0)}
 
-plain.update({"background": "rain.gif", "background_brightness": 0.25})
+plain.update({"background_enabled": True, "background": "nebula.gif",
+              "background_brightness": 0.25})
 withbg = bg_clock.frame_for(plain.snapshot(), WHEN, elapsed=0.4)
 check("background lights letters the time does not",
       len([i for i, c in enumerate(withbg) if c != (0, 0, 0)]) > len(word_leds))
@@ -185,29 +189,82 @@ check("the background animates", moved != withbg)
 check("the words hold still while it does",
       all(moved[i] == withbg[i] for i in word_leds))
 
-# a dark theme must not be swamped: the ratio holds whatever the theme
-ratios = []
-for theme, hour in (("phases", 23), ("phases", 14), ("solid", 14)):
-    plain.update({"theme": theme, "background": "confetti.gif",
-                  "background_brightness": 0.25})
-    current = plain.snapshot()
-    at = datetime(2026, 8, 11, hour, 17)
-    words = dict(bg_clock.word_colors(current, at))
+# the two brightnesses are independent: one slider must not move the other
+def layer_peaks(text_brightness, background_brightness):
+    current = dict(plain.snapshot(), theme="solid", color=[255, 255, 255],
+                   background_enabled=True, background="nebula.gif",
+                   brightness=text_brightness,
+                   background_brightness=background_brightness)
+    composed = bg_clock.frame_for(current, WHEN, elapsed=0.4)
+    words = dict(bg_clock.word_colors(current, WHEN, 0.4))
     lit = {i for w, (a, b) in ClockDisplayHAL.WORDS_TO_LEDS.items() if w in words
            for i in range(a, b + 1)}
-    composed = bg_clock.frame_for(current, at, elapsed=0.4)
     behind = [max(composed[i]) for i in range(ClockDisplayHAL.NUM_LEDS)
               if i not in lit and composed[i] != (0, 0, 0)]
-    ratios.append(round(max(max(composed[i]) for i in lit) / max(behind), 1))
-check("background is scaled to the time, not to full scale",
-      len(set(ratios)) == 1, ratios)
+    return max(max(composed[i]) for i in lit), (max(behind) if behind else 0)
 
-plain.update({"theme": "solid", "background": ""})
-check("no background means no extra light",
+
+text_levels = {layer_peaks(b, 0.25)[0] for b in (0.25, 0.5, 0.75, 1.0)}
+background_levels = {layer_peaks(b, 0.25)[1] for b in (0.25, 0.5, 0.75, 1.0)}
+check("text brightness dims the text", len(text_levels) == 4, sorted(text_levels))
+check("text brightness leaves the background alone", len(background_levels) == 1,
+      background_levels)
+
+text_levels = {layer_peaks(0.5, g)[0] for g in (0.1, 0.25, 0.5, 1.0)}
+background_levels = {layer_peaks(0.5, g)[1] for g in (0.1, 0.25, 0.5, 1.0)}
+check("animation brightness dims the background", len(background_levels) == 4,
+      sorted(background_levels))
+check("animation brightness leaves the text alone", len(text_levels) == 1, text_levels)
+
+plain.update({"theme": "solid", "background_enabled": False})
+check("switching the background off leaves only the time",
       bg_clock.frame_for(plain.snapshot(), WHEN) == without)
-check("a background makes the display animated",
-      themes.is_animated(dict(plain.snapshot(), background="rain.gif"))
-      and not themes.is_animated(plain.snapshot()))
+check("the animation is remembered while it is off",
+      plain.get("background") == "nebula.gif", plain.get("background"))
+plain.update({"background_enabled": True, "background": ""})
+check("enabled with nothing chosen shows nothing extra",
+      bg_clock.frame_for(plain.snapshot(), WHEN) == without)
+plain.update({"background": "ripple.gif"})
+check("a background makes the display animated", themes.is_animated(plain.snapshot()))
+check("and switching it off makes it static again",
+      not themes.is_animated(dict(plain.snapshot(), background_enabled=False)))
+
+# only a curated few are offered as backgrounds
+offered = backgrounds.names()
+check("five backgrounds are offered", len(offered) == 5, offered)
+
+# A leading underscore shelves a file: it stays in the folder but is kept out
+# of the picker, so one can be retired and brought back with a rename. Built
+# here rather than leaning on a shipped file, so the rule is what is tested.
+shelf = tempfile.mkdtemp()
+for filename in ("kept.gif", "_shelved.gif"):
+    with open(os.path.join(shelf, filename), "wb") as handle:
+        handle.write(b"")
+shelf_library = GifLibrary(shelf)
+check("a shelved animation is still on disk",
+      os.path.isfile(os.path.join(shelf, "_shelved.gif")))
+check("a shelved animation is left out of the picker",
+      shelf_library.names() == ["kept.gif"], shelf_library.names())
+check("a shelved animation cannot be resolved to a path",
+      shelf_library.path_for("_shelved.gif") is None)
+shelf_settings = Settings(os.path.join(tempfile.mkdtemp(), "s.json"),
+                          background_names=shelf_library.names)
+check("a shelved animation is not a valid setting",
+      "background" in shelf_settings.update({"background": "_shelved.gif"})[1])
+os.rename(os.path.join(shelf, "_shelved.gif"), os.path.join(shelf, "shelved.gif"))
+check("renaming brings it back",
+      shelf_library.names() == ["kept.gif", "shelved.gif"], shelf_library.names())
+check("backgrounds are kept out of the hourly set",
+      not (set(offered) & set(library.names())), set(offered) & set(library.names()))
+for name in offered:
+    frames = gif_module.load_frames(os.path.join(BACKGROUNDS, name))
+    shapes = all(len(g) == ClockDisplayHAL.HEIGHT
+                 and all(len(r) == ClockDisplayHAL.WIDTH for r in g) for g, _ in frames)
+    moves = len({tuple(c for row in g for c in row) for g, _ in frames}) > 1
+    check(f"background {name} decodes and animates", bool(frames) and shapes and moves,
+          f"{len(frames)} frames")
+check("an hourly animation is not a valid background",
+      "background" in plain.update({"background": "sun.gif"})[1])
 
 
 # --- crossfade --------------------------------------------------------------
@@ -219,7 +276,7 @@ timekeeper.now = lambda tz="": fake["t"]
 
 fade_settings = fresh_settings(library)
 fade_hal = ClockDisplayHAL("D12", 1.0)
-fade_clock = WordClock(fade_hal, fade_settings, library)
+fade_clock = WordClock(fade_hal, fade_settings, backgrounds)
 pushed = []
 fade_hal.show = (lambda original: lambda: (pushed.append(list(fade_hal.pixels.buffer)),
                                            original())[1])(fade_hal.show)
@@ -287,7 +344,7 @@ timekeeper.now = real_now
 
 print("\n-- animations --")
 names = library.names()
-check("twelve animations ship with the clock", len(names) == 12, len(names))
+check("thirteen animations ship with the clock", len(names) == 13, len(names))
 for name in names:
     frames = gif_module.load_frames(library.path_for(name))
     shapes = all(len(g) == ClockDisplayHAL.HEIGHT
@@ -324,7 +381,7 @@ loop_settings = fresh_settings(library, gifs_enabled=True, gif_mode="hourly",
                                gif_duration=1.0,
                                hour_gifs={"3": "sun.gif", "4": "moon.gif"})
 loop_hal = ClockDisplayHAL("D12", 1.0)
-loop_clock = WordClock(loop_hal, loop_settings, library)
+loop_clock = WordClock(loop_hal, loop_settings, backgrounds)
 threading.Thread(target=wordclock_main.run,
                  args=(loop_hal, loop_clock, loop_settings, library), daemon=True).start()
 
@@ -376,7 +433,7 @@ for hour, minute, shown in [(0, 5, "12:05 AM"), (12, 0, "12:00 PM"), (15, 34, "3
                                          tzinfo=timekeeper.resolve_timezone("America/Chicago")))
     check(f"12-hour label {hour:02d}:{minute:02d}", label.startswith(shown), label)
 
-server = webui.start(api_settings, library, clock, "127.0.0.1", 0)
+server = webui.start(api_settings, library, backgrounds, clock, "127.0.0.1", 0)
 check("web server starts", server is not None)
 PORT = server.server_address[1] if server else 0
 

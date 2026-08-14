@@ -72,7 +72,14 @@ PAGE_TEMPLATE = """<!doctype html>
   label { display: block; font-size: 14px; color: #b9c0d0; margin-bottom: 6px; }
   .row { display: flex; gap: 10px; align-items: center; }
   .row + .row { margin-top: 14px; }
-  input[type=range] { width: 100%; accent-color: #6c8cff; }
+  /* Opens a subsection inside a card. The gap alone does the separating, so it
+     has to be clearly wider than the spacing between rows of one group. */
+  .row.spaced { margin-top: 34px; }
+  /* Still one group, just given room to breathe under the control above it. */
+  .row.loose { margin-top: 24px; }
+  /* Chrome gives range inputs a 2px margin all round, which would leave the
+     track a hair right of every label. */
+  input[type=range] { width: 100%; accent-color: #6c8cff; margin: 2px 0; }
   input[type=color] { width: 46px; height: 34px; padding: 0; border: 1px solid #333a4d;
                       border-radius: 8px; background: #11131a; }
   input[type=text], select {
@@ -83,6 +90,9 @@ PAGE_TEMPLATE = """<!doctype html>
      so it is replaced with one we can position. */
   select {
     -webkit-appearance: none; -moz-appearance: none; appearance: none;
+    /* Nudged left so the box sits on the same edge the slider tracks do. The
+       width makes up the difference, so the right edge does not move. */
+    margin-left: -2px; width: calc(100% + 2px);
     padding-right: 36px;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238f97ad' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
@@ -141,17 +151,22 @@ PAGE_TEMPLATE = """<!doctype html>
     width: 52px; flex: none; font-size: 13px; color: #b9c0d0;
     font-variant-numeric: tabular-nums;
   }
+  /* Sits beside its hour rather than under a label, so it keeps the row's own
+     spacing instead of the nudge above. */
   .hour-row select {
     flex: 1; padding: 6px 32px 6px 8px; font-size: 14px;
-    background-position: right 12px center;
+    background-position: right 12px center; margin-left: 0;
   }
   .hour-row .play { align-self: stretch; }
   .error { color: #ff8a8a; font-size: 13px; margin-top: 8px; overflow-wrap: anywhere; }
   /* Sits with the time and phrase under the face, so it reads as part of that
      block rather than hanging off the left edge. */
   #preview-error { text-align: center; }
-  label.strong { color: #e8eaf0; font-weight: 600; }
-  hr { border: 0; border-top: 1px solid #262a38; margin: 16px 0 14px; }
+  /* Subsection headings inside a card. Matched by label.strong so a heading and
+     a switch label read as the same level. */
+  label.strong, .subhead {
+    color: #e8eaf0; font-weight: 600; font-size: 14px; margin-bottom: 6px;
+  }
   .hidden { display: none; }
 
   /* Preview of the clock face */
@@ -244,17 +259,7 @@ PAGE_TEMPLATE = """<!doctype html>
       <h2 style="margin:0">Display</h2>
       <span id="power" class="status">On</span>
     </div>
-    <div class="row" style="margin-top:14px">
-      <div style="flex:1">
-        <label for="brightness">Brightness</label>
-        <input type="range" id="brightness" min="0" max="1" step="0.01">
-      </div>
-      <div class="value" id="brightness-value"></div>
-    </div>
-  </section>
-
-  <section>
-    <h2>Theme</h2>
+    <div class="subhead" style="margin-top:14px">Clock theme</div>
     <div class="themes" id="themes"></div>
     <div class="row" id="color-row">
       <div style="flex:1"><label for="color" id="color-label">Color</label></div>
@@ -268,8 +273,16 @@ PAGE_TEMPLATE = """<!doctype html>
       </div>
       <div class="value" id="speed-value"></div>
     </div>
-    <hr>
-    <div class="row">
+
+    <div class="row spaced">
+      <div style="flex:1">
+        <label for="brightness" class="strong">Text brightness</label>
+        <input type="range" id="brightness" min="0" max="1" step="0.01">
+      </div>
+      <div class="value" id="brightness-value"></div>
+    </div>
+
+    <div class="row spaced">
       <div style="flex:1"><label for="sparkle" class="strong">Letter shimmer</label></div>
       <label class="switch">
         <input type="checkbox" id="sparkle"><span></span>
@@ -282,34 +295,14 @@ PAGE_TEMPLATE = """<!doctype html>
       </div>
       <div class="value" id="shimmer-speed-value"></div>
     </div>
-  </section>
 
-  <section>
-    <h2>Background</h2>
-    <div class="row">
-      <div style="flex:1">
-        <label for="background">Animation behind the time</label>
-        <select id="background"></select>
-      </div>
-    </div>
-    <div class="row" id="background-brightness-row">
-      <div style="flex:1">
-        <label for="background-brightness">Background brightness</label>
-        <input type="range" id="background-brightness" min="0" max="1" step="0.01">
-      </div>
-      <div class="value" id="background-brightness-value"></div>
-    </div>
-    <div class="hint">Plays continuously behind the time, dimmed so the words
-      stay readable. The hourly animation still takes the whole face.</div>
-  </section>
-
-  <section>
-    <div class="toggle">
-      <h2 style="margin:0">Cuckoo clock</h2>
+    <div class="row spaced">
+      <div style="flex:1"><label for="gifs-enabled" class="strong">Cuckoo clock</label></div>
       <label class="switch">
-        <input type="checkbox" id="gifs-enabled" aria-label="Play an animation on the hour"><span></span>
+        <input type="checkbox" id="gifs-enabled"><span></span>
       </label>
     </div>
+    <div id="cuckoo-controls">
     <div class="row" style="margin-top:14px">
       <div style="flex:1">
         <label for="gif-mode">On the hour, play</label>
@@ -330,7 +323,7 @@ PAGE_TEMPLATE = """<!doctype html>
       </div>
     </div>
     <div id="hour-rows"></div>
-    <div class="row">
+    <div class="row loose">
       <div style="flex:1">
         <label for="gif-duration">Play for</label>
         <input type="range" id="gif-duration" min="1" max="60" step="1">
@@ -339,7 +332,34 @@ PAGE_TEMPLATE = """<!doctype html>
     </div>
     <div class="row" id="play-gif-row"><button id="play-gif">Preview animation</button></div>
     <div class="hint" id="gif-status"></div>
-    <div class="hint" id="gif-hint"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="toggle">
+      <h2 style="margin:0">Background animations</h2>
+      <label class="switch">
+        <input type="checkbox" id="background-enabled"
+               aria-label="Play an animation behind the time"><span></span>
+      </label>
+    </div>
+    <div id="background-controls">
+      <div class="row" style="margin-top:14px">
+        <div style="flex:1">
+          <label for="background">Select animation</label>
+          <select id="background"></select>
+        </div>
+      </div>
+      <div class="row">
+        <div style="flex:1">
+          <label for="background-brightness">Animation brightness</label>
+          <input type="range" id="background-brightness" min="0" max="1" step="0.01">
+        </div>
+        <div class="value" id="background-brightness-value"></div>
+      </div>
+      <div class="hint">Plays continuously behind the time, dimmed so the words
+        stay readable. The hourly animation still takes the whole face.</div>
+    </div>
   </section>
 
   <section>
@@ -376,6 +396,13 @@ var savedTimer = null;
 
 function el(id) { return document.getElementById(id); }
 function copy(value) { return JSON.parse(JSON.stringify(value)); }
+
+// Filenames make poor labels. The value stays the real name on disk, so only
+// what the eye reads changes: "heart_art_small.gif" shows as "Heart art small".
+function animationLabel(name) {
+  var label = name.replace(/\\.[^.]+$/, '').replace(/_/g, ' ');
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
 
 function api(path, body) {
   var options = { method: body ? 'POST' : 'GET' };
@@ -560,17 +587,27 @@ var renderedBackgrounds = null;
 
 function renderBackground() {
   var select = el('background');
-  var signature = state.gifs.join('\\u0000');
+  var choices = state.background_gifs || [];
+  var signature = choices.join('\\u0000');
   if (signature !== renderedBackgrounds && document.activeElement !== select) {
     renderedBackgrounds = signature;
     select.innerHTML = '';
-    select.appendChild(new Option('None', ''));
-    state.gifs.forEach(function (name) {
-      select.appendChild(new Option(name.replace(/\\.gif$/i, ''), name));
+    choices.forEach(function (name) {
+      select.appendChild(new Option(animationLabel(name), name));
     });
   }
+  // A background set outside the interface may not be one of the offered
+  // choices; keep it selectable rather than silently showing something else.
+  if (draft.background && choices.indexOf(draft.background) < 0
+      && !Array.prototype.some.call(select.options, function (o) {
+        return o.value === draft.background;
+      })) {
+    select.appendChild(new Option(animationLabel(draft.background), draft.background));
+  }
   if (document.activeElement !== select) select.value = draft.background || '';
-  el('background-brightness-row').className = draft.background ? 'row' : 'row hidden';
+
+  el('background-enabled').checked = !!draft.background_enabled;
+  el('background-controls').className = draft.background_enabled ? '' : 'hidden';
   if (document.activeElement !== el('background-brightness')) {
     el('background-brightness').value = draft.background_brightness;
   }
@@ -589,7 +626,7 @@ function renderGifs() {
     renderedGifs = signature;
     select.innerHTML = '';
     state.gifs.forEach(function (name) {
-      select.appendChild(new Option(name, name));
+      select.appendChild(new Option(animationLabel(name), name));
     });
   }
   // With nothing chosen the clock plays the first animation, so show that
@@ -601,9 +638,6 @@ function renderGifs() {
   // would be ambiguous about which hour it meant.
   el('play-gif-row').className = draft.gif_mode === 'hourly' ? 'row hidden' : 'row';
   renderHourRows();
-  el('gif-hint').textContent = state.gifs.length
-    ? state.gifs.length + ' animation(s) in ' + state.gif_directory
-    : 'No animations found. Drop .gif files into ' + state.gif_directory;
 }
 
 var hourSelects = null;
@@ -653,7 +687,7 @@ function renderHourRows() {
       picker.innerHTML = '';
       picker.appendChild(new Option('Random', ''));
       state.gifs.forEach(function (name) {
-        picker.appendChild(new Option(name.replace(/\\.gif$/i, ''), name));
+        picker.appendChild(new Option(animationLabel(name), name));
       });
     }
     if (document.activeElement !== picker) picker.value = wanted;
@@ -721,6 +755,7 @@ function render() {
   el('shimmer-speed-value').textContent = Number(draft.shimmer_speed).toFixed(3);
 
   el('gifs-enabled').checked = !!draft.gifs_enabled;
+  el('cuckoo-controls').className = draft.gifs_enabled ? '' : 'hidden';
   el('gif-mode').value = draft.gif_mode;
   el('gif-duration').value = draft.gif_duration;
   el('gif-duration-value').textContent = draft.gif_duration + 's';
@@ -734,6 +769,14 @@ el('brightness').oninput = function () { draft.brightness = Number(this.value); 
 el('sparkle').onchange = function () { draft.sparkle = this.checked; changed(); };
 el('speed').oninput = function () { draft.animation_speed = Number(this.value); changed(); };
 el('shimmer-speed').oninput = function () { draft.shimmer_speed = Number(this.value); changed(); };
+el('background-enabled').onchange = function () {
+  draft.background_enabled = this.checked;
+  // Switching on with nothing chosen would show nothing at all.
+  if (this.checked && !draft.background && (state.background_gifs || []).length) {
+    draft.background = state.background_gifs[0];
+  }
+  changed();
+};
 el('background').onchange = function () { draft.background = this.value; changed(); };
 el('background-brightness').oninput = function () {
   draft.background_brightness = Number(this.value);
@@ -964,7 +1007,7 @@ def _face_markup():
 PAGE = PAGE_TEMPLATE.replace("<!--FACE-->", _face_markup())
 
 
-def _make_handler(settings, gif_library, word_clock):
+def _make_handler(settings, gif_library, background_library, word_clock):
 
     def build_state(errors=None):
         current = settings.snapshot()
@@ -973,6 +1016,7 @@ def _make_handler(settings, gif_library, word_clock):
             "settings": current,
             "themes": themes.catalog(),
             "gifs": gif_library.names(),
+            "background_gifs": background_library.names(),
             "gif_directory": gif_library.directory,
             "crossfade": CROSSFADE_SECONDS,
             "clock": {
@@ -990,13 +1034,19 @@ def _make_handler(settings, gif_library, word_clock):
 
         lit = {}
         if values["display_on"]:
-            scale = PREVIEW_FLOOR + (1.0 - PREVIEW_FLOOR) * values["brightness"]
+            # The frame already carries its brightness. Lift the whole thing by
+            # one factor so a screen stays legible at settings that read fine on
+            # an LED, without changing how the layers sit against each other.
+            brightness = values["brightness"]
+            lift = 1.0
+            if brightness > 0:
+                lift = (PREVIEW_FLOOR + (1.0 - PREVIEW_FLOOR) * brightness) / brightness
             # The same per-LED frame the clock draws, so per-letter effects such
             # as sparkle show up here exactly as they do on the LEDs.
             for index, color in enumerate(word_clock.frame_for(values, moment)):
                 if color != (0, 0, 0):
                     lit[index] = "#%02x%02x%02x" % tuple(
-                        int(channel * scale) for channel in color
+                        min(255, int(channel * lift)) for channel in color
                     )
 
         colors = []
@@ -1126,10 +1176,11 @@ def _make_handler(settings, gif_library, word_clock):
     return WordClockHandler
 
 
-def start(settings, gif_library, word_clock, host="0.0.0.0", port=8080):
+def start(settings, gif_library, background_library, word_clock,
+          host="0.0.0.0", port=8080):
     """Start the web server on a daemon thread. Returns the server, or None."""
     try:
-        server = ThreadingHTTPServer((host, port), _make_handler(settings, gif_library, word_clock))
+        server = ThreadingHTTPServer((host, port), _make_handler(settings, gif_library, background_library, word_clock))
     except OSError as error:
         print(f"Web interface disabled, could not listen on {host}:{port}: {error}")
         return None

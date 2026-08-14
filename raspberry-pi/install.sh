@@ -8,6 +8,7 @@ SERVICE_NAME="word_clock.service"
 SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
 SCRIPT_PATH="$BASE_PATH/src/wordclock/main.py"
 GIF_DIRECTORY="$BASE_PATH/gifs"
+BACKGROUND_DIRECTORY="$BASE_PATH/backgrounds"
 CONFIG_PATH="$BASE_PATH/wordclock.json"
 WORKING_DIRECTORY="$BASE_PATH/src/wordclock"
 PYTHON_PATH="/usr/bin/python3"
@@ -30,7 +31,7 @@ Description=Word Clock Service
 After=multi-user.target network.target
 
 [Service]
-ExecStart=$PYTHON_PATH $SCRIPT_PATH --pin $LED_PIN --gif-dir $GIF_DIRECTORY --config $CONFIG_PATH --web-port $WEB_PORT
+ExecStart=$PYTHON_PATH $SCRIPT_PATH --pin $LED_PIN --gif-dir $GIF_DIRECTORY --background-dir $BACKGROUND_DIRECTORY --config $CONFIG_PATH --web-port $WEB_PORT
 WorkingDirectory=$WORKING_DIRECTORY
 StandardOutput=inherit
 StandardError=inherit
@@ -65,4 +66,5 @@ echo
 echo "Installation complete!"
 echo "Web interface: http://$(hostname -I 2>/dev/null | awk '{print $1}'):$WEB_PORT (also http://$(hostname).local:$WEB_PORT)"
 echo "Animations:    put .gif files in $GIF_DIRECTORY"
+echo "Backgrounds:   $BACKGROUND_DIRECTORY"
 echo "Settings:      $CONFIG_PATH"

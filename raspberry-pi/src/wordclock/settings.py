@@ -32,7 +32,9 @@ DEFAULTS = {
     "gif_name": "",
     "gif_duration": 6.0,
     # An animation running quietly behind the time, as opposed to the hourly
-    # one that takes the whole face. Empty means no background.
+    # one that takes the whole face. The chosen animation is remembered while
+    # the switch is off.
+    "background_enabled": False,
     "background": "",
     "background_brightness": 0.25,
     # Which animation plays at each hour, "1" through "12". An empty value
@@ -99,9 +101,10 @@ def _copy(value):
 
 
 class Settings:
-    def __init__(self, path, gif_names=lambda: []):
+    def __init__(self, path, gif_names=lambda: [], background_names=lambda: []):
         self._path = path
         self._gif_names = gif_names
+        self._background_names = background_names
         self._lock = threading.Lock()
         self._values = dict(DEFAULTS)
         self._pending_gif = None
@@ -196,7 +199,7 @@ class Settings:
         return applied, errors
 
     def _clean(self, key, value):
-        if key in ("display_on", "gifs_enabled", "sparkle"):
+        if key in ("display_on", "gifs_enabled", "sparkle", "background_enabled"):
             return _boolean(value, key)
         if key == "brightness":
             return round(_number(value, key, 0.0, 1.0), 3)
@@ -212,11 +215,15 @@ class Settings:
             return _choice(value, key, GIF_MODES)
         if key == "background_brightness":
             return round(_number(value, key, 0.0, 1.0), 3)
-        if key in ("gif_name", "background"):
+        if key == "background":
             if not value:
                 return ""
-            # Only names the GIF library actually reported are accepted, so a
-            # request can never reach outside the GIF directory.
+            return _choice(value, key, self._background_names() or [""])
+        if key == "gif_name":
+            if not value:
+                return ""
+            # Only names the library actually reported are accepted, so a
+            # request can never reach outside its directory.
             return _choice(value, key, self._gif_names() or [""])
         if key == "hour_gifs":
             return self._clean_hour_gifs(value)

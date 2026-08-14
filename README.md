@@ -17,9 +17,13 @@ word-clock-main/
 ├── esp/
 │   └── wordclock/
 └── raspberry-pi/
-    ├── gifs/                       # twelve animations played on the hour
+    ├── gifs/                       # thirteen animations played on the hour
+    ├── backgrounds/                # five animations played behind the time
+    ├── tests/
+    │   └── test_wordclock.py       # runs off-hardware against stubbed LEDs
     ├── tools/
-    │   └── make_animations.py      # regenerates the bundled animations
+    │   ├── make_animations.py      # regenerates the hourly animations
+    │   └── make_backgrounds.py     # regenerates the backgrounds
     ├── install.sh
     ├── requirements.txt
     ├── src/
@@ -49,9 +53,11 @@ Once installed, the Raspberry Pi build offers:
   explicit save — see [Using the clock](docs/using_the_clock.md)
 - **Color themes**: phases of the day, solid, gradient, rainbow, color cycle and
   spectrum, plus a letter shimmer that can be switched on over any of them
-- **Animations**: twelve bundled 12x11 animations, one per hour of the dial, and
-  you can drop in your own. One plays at the top of every hour, then the time
+- **Animations**: thirteen bundled 12x11 animations, one for each hour of the
+  dial plus a spare, and you can drop in your own. One plays at the top of every hour, then the time
   comes back. Choose them per hour and preview them without waiting
+- **Background animations**: a separate set of five that play quietly behind the
+  time — aurora, drift, embers, nebula and ripple
 - **Correct daylight saving time**: pick a time zone from the dropdown or let it
   detect your device's, and DST is applied from the tz database
 

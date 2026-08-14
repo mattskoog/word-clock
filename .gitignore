@@ -1,6 +1,7 @@
 *.gif
 # The bundled animations ship with the project; anything you add elsewhere does not.
 !raspberry-pi/gifs/*.gif
+!raspberry-pi/backgrounds/*.gif
 .idea
 *.pyc
 __pycache__/

@@ -254,6 +254,39 @@ def rain():
     return frames
 
 
+def matrix():
+    """Falling glyph trails. Bright head, tail fading out behind it.
+
+    Speeds divide the loop exactly, as with rain, so the columns wrap without
+    a visible jump when the animation loops inside its play time.
+    """
+    random.seed(19)
+    steps = 44
+    speeds = (0.25, 0.5, 0.75, 1.0)  # steps * speed is a whole number of rows
+    head_color = (200, 255, 205)
+    body_color = (0, 190, 70)
+    columns = [(column, random.uniform(0, HEIGHT), random.choice(speeds),
+                random.randint(3, 6))
+               for column in range(WIDTH)]
+    # A second run in some columns so the rain is uneven rather than a curtain.
+    columns += [(column, random.uniform(0, HEIGHT), random.choice(speeds),
+                 random.randint(3, 5))
+                for column in random.sample(range(WIDTH), 5)]
+
+    frames = []
+    for step in range(steps):
+        grid = blank()
+        for column, start, speed, length in columns:
+            head = (start + step * speed) % HEIGHT
+            for offset in range(length):
+                # The tail trails upwards, dimming as it goes.
+                falloff = 1.0 - offset / float(length)
+                color = head_color if offset == 0 else fade(body_color, falloff * 0.8)
+                put(grid, column, (head - offset) % HEIGHT, color)
+        frames.append(grid)
+    return frames
+
+
 def fireworks():
     # Individual sparks flying outwards read far better at this size than a
     # drawn ring, which turned into a dim smudge.
@@ -340,6 +373,7 @@ ANIMATIONS = {
     "rocket": rocket,
     "snow": snow,
     "rain": rain,
+    "matrix": matrix,
     "fireworks": fireworks,
     "swirl": swirl,
     "wave": wave,
