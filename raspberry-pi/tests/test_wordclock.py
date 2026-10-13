@@ -9,6 +9,7 @@ Only Pillow is required, which the clock needs anyway.
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import threading
@@ -27,6 +28,7 @@ WEATHER = os.path.join(PROJECT, "weather")
 import gif as gif_module
 import main as wordclock_main
 import themes
+import provisioning
 import timekeeper
 import weather
 import webui
@@ -543,6 +545,133 @@ check("cuckoo switched off plays nothing", played == [], played)
 gif_module.play = real_play
 wordclock_main.gif.play = real_play
 timekeeper.now = loop_now
+
+
+# --- network setup display --------------------------------------------------
+
+print("\n-- network setup display --")
+
+state_dir = tempfile.mkdtemp()
+state_path = os.path.join(state_dir, "network-state")
+
+check("a missing state file reads as nothing", provisioning.read_state(state_path) == "")
+
+
+def write_state(word):
+    with open(state_path, "w") as handle:
+        handle.write(word + "\n")
+
+
+for word in ("HOTSPOT", "CONNECTING", "CONNECTED"):
+    write_state(word)
+    check(f"{word} is read back", provisioning.read_state(state_path) == word)
+write_state("  hotspot  ")
+check("the state is trimmed and upper-cased",
+      provisioning.read_state(state_path) == "HOTSPOT")
+# comitup is the only writer, but a junk value must not be turned into a frame.
+write_state("REBOOTING")
+check("an unknown state reads as nothing", provisioning.read_state(state_path) == "")
+
+
+def lit(frame):
+    return [c for c in frame if c != (0, 0, 0)]
+
+
+# The three states have to be told apart across a room by someone who has
+# never seen the clock, so they differ in motion as well as colour.
+hotspot = provisioning.hotspot_frame(2.0)
+connecting = provisioning.connecting_frame(2.0)
+check("hotspot lights the face", lit(hotspot))
+check("connecting lights the face", lit(connecting))
+check("hotspot is amber", max(lit(hotspot), key=sum)[0] > max(lit(hotspot), key=sum)[2])
+check("connecting is blue",
+      max(lit(connecting), key=sum)[2] > max(lit(connecting), key=sum)[0])
+check("the two states do not look alike", hotspot != connecting)
+check("hotspot moves", provisioning.hotspot_frame(0.0) != provisioning.hotspot_frame(1.0))
+check("connecting moves",
+      provisioning.connecting_frame(0.0) != provisioning.connecting_frame(0.5))
+
+check("connected starts lit", lit(provisioning.connected_frame(0.0)))
+check("connected fades",
+      max(map(max, lit(provisioning.connected_frame(2.0))))
+      < max(map(max, lit(provisioning.connected_frame(0.0)))))
+check("connected gives up after its moment",
+      provisioning.connected_frame(provisioning.CONFIRM_SECONDS) is None)
+
+# A clock handed over at 2% would look dead during setup, which is the one
+# moment it has to look alive.
+dim = provisioning.hotspot_frame(2.0, brightness=0.02)
+check("a dim setting cannot hide the setup display",
+      max(map(max, lit(dim))) > 40, max(map(max, lit(dim))))
+check("a bright setting is still brighter",
+      max(map(max, lit(provisioning.hotspot_frame(2.0, 1.0))))
+      > max(map(max, lit(dim))))
+
+# The display itself, driven on a clock we control.
+write_state("HOTSPOT")
+display = provisioning.NetworkDisplay(state_path, poll_seconds=0.0)
+check("the display shows the hotspot state",
+      display.frame(1.0, now=100.0) is not None)
+check("and reports it", display.state == "HOTSPOT", display.state)
+
+write_state("CONNECTED")
+check("a confirmation shows at first",
+      display.frame(1.0, now=200.0) is not None)
+check("and is gone once it has had its moment",
+      display.frame(1.0, now=200.0 + provisioning.CONFIRM_SECONDS + 0.1) is None)
+
+os.remove(state_path)
+check("with the file gone the clock goes back to the time",
+      display.frame(1.0, now=300.0) is None)
+check("a clock with no provisioning never looks",
+      provisioning.NetworkDisplay("", poll_seconds=0.0).frame(1.0, now=0.0) is None)
+
+# The callback is what writes that file, and it is shipped executable because
+# comitup will not run it otherwise.
+callback = os.path.join(PROJECT, "tools", "comitup-callback")
+check("the callback ships", os.path.isfile(callback))
+# comitup will not run a callback without the bit set, and the failure is
+# silent: the clock would just never show a setup state.
+check("the callback is executable", os.access(callback, os.X_OK))
+callback_dir = tempfile.mkdtemp()
+written = []
+for word in ("HOTSPOT", "CONNECTING", "CONNECTED"):
+    subprocess.run([callback, word], check=True,
+                   env=dict(os.environ, WORDCLOCK_STATE_DIR=callback_dir))
+    written.append(provisioning.read_state(
+        os.path.join(callback_dir, "network-state")))
+check("the callback records each state",
+      written == ["HOTSPOT", "CONNECTING", "CONNECTED"], written)
+check("and leaves no half-written file behind",
+      os.listdir(callback_dir) == ["network-state"], os.listdir(callback_dir))
+
+# End to end through the real render loop: setup outranks the time, and the
+# clock takes the face back afterwards.
+net_fake = {"t": datetime(2026, 8, 11, 15, 17)}
+timekeeper.now = lambda tz="": net_fake["t"]
+net_state = os.path.join(tempfile.mkdtemp(), "network-state")
+net_settings = fresh_settings(library, gifs_enabled=False)
+net_hal = ClockDisplayHAL("D12", 1.0)
+net_clock = WordClock(net_hal, net_settings, backgrounds)
+net_display = provisioning.NetworkDisplay(net_state, poll_seconds=0.05)
+threading.Thread(target=wordclock_main.run,
+                 args=(net_hal, net_clock, net_settings, library, net_display),
+                 daemon=True).start()
+time.sleep(0.6)
+words_showing = list(net_hal.pixels.buffer)
+with open(net_state, "w") as handle:
+    handle.write("HOTSPOT\n")
+time.sleep(0.6)
+setup_showing = list(net_hal.pixels.buffer)
+check("the loop puts setup ahead of the time", setup_showing != words_showing,
+      len(net_hal.pixels.lit()))
+check("and lights far more of the face than the words do",
+      len(net_hal.pixels.lit()) > 60)
+os.remove(net_state)
+time.sleep(0.8)
+check("the clock takes the face back when setup is done",
+      net_clock.phrase(net_fake["t"]) == "it is fifteen minutes past three"
+      and list(net_hal.pixels.buffer) != setup_showing)
 
 
 # --- settings and the web API -----------------------------------------------

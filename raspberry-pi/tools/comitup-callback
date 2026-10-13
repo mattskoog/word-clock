@@ -1,0 +1,25 @@
+#!/bin/sh
+# Called by comitup on every network state change, with one argument:
+# HOTSPOT, CONNECTING or CONNECTED.
+#
+# This cannot draw on the clock face itself - the word clock service owns the
+# LED strip, and a second writer would fight it for the bus. So it records the
+# state and the clock picks it up on its next tick.
+#
+# Install:
+#   sudo install -m 755 tools/comitup-callback /usr/local/bin/comitup-callback
+# and in /etc/comitup.conf:
+#   external_callback: /usr/local/bin/comitup-callback
+
+set -eu
+
+# Overridable so this can be exercised off the Pi; the clock reads the default.
+STATE_DIR="${WORDCLOCK_STATE_DIR:-/run/wordclock}"
+STATE_FILE="$STATE_DIR/network-state"
+
+mkdir -p "$STATE_DIR"
+
+# Written then moved, so the clock never reads a half-written file.
+printf '%s\n' "${1:-}" > "$STATE_FILE.tmp"
+chmod 644 "$STATE_FILE.tmp"
+mv -f "$STATE_FILE.tmp" "$STATE_FILE"

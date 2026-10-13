@@ -5,6 +5,7 @@ import sys
 import time
 
 import gif
+import provisioning
 import themes
 import timekeeper
 import webui
@@ -25,8 +26,9 @@ ANIMATED_TICK = 0.1  # redraw interval while an animated theme is running
 IDLE_TICK = 0.5
 
 
-def run(clock_display_hal, word_clock, settings, gif_library):
+def run(clock_display_hal, word_clock, settings, gif_library, network=None):
     last_brightness = None
+    showing_network = False
     display_is_clear = False
     # Disarmed for the rest of minute zero once the hourly animation has run.
     hourly_animation_armed = True
@@ -48,6 +50,23 @@ def run(clock_display_hal, word_clock, settings, gif_library):
             time.sleep(IDLE_TICK)
             continue
         display_is_clear = False
+
+        # Network setup outranks the time. Until the clock is on a network it
+        # has had no NTP, so the time it would show is wrong; and whoever is
+        # unboxing it needs to be told it is waiting for them, not broken.
+        network_frame = network.frame(current["brightness"]) if network else None
+        if network_frame is not None:
+            clock_display_hal.display_frame(network_frame)
+            clock_display_hal.show()
+            showing_network = True
+            time.sleep(ANIMATED_TICK)
+            continue
+        if showing_network:
+            # Coming back from the setup display, nothing on the strip belongs
+            # to the clock, so the next draw has to be a full one.
+            showing_network = False
+            clock_display_hal.clear_pixels(show=False)
+            word_clock.invalidate(cleared=True)
 
         moment = timekeeper.now(current["timezone"])
         top_of_the_hour = moment.minute == 0
@@ -117,6 +136,7 @@ def main(arguments):
 
     # The driver stays at full: brightness is applied per layer in software.
     clock_display_hal = ClockDisplayHAL(arguments.pin, 1.0)
+    network = provisioning.NetworkDisplay(arguments.network_state)
     weather_watch = weather.WeatherWatch(settings)
     word_clock = WordClock(clock_display_hal, settings, background_library,
                            weather_library, weather_watch)
@@ -127,6 +147,7 @@ def main(arguments):
     print(f"Animations: {gif_directory} ({len(gif_library.names())} found)")
     print(f"Backgrounds: {arguments.background_dir} ({len(background_library.names())} found)")
     print(f"Weather: {arguments.weather_dir} ({len(weather_library.names())} found)")
+    print(f"Network setup display: {provisioning.install_hint(arguments.network_state)}")
     print(f"Time zone: {settings.get('timezone') or 'system default'} "
           f"({timekeeper.describe(word_clock.now())})")
 
@@ -136,7 +157,7 @@ def main(arguments):
 
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     try:
-        run(clock_display_hal, word_clock, settings, gif_library)
+        run(clock_display_hal, word_clock, settings, gif_library, network)
     except KeyboardInterrupt:
         pass
     finally:
@@ -155,6 +176,9 @@ if __name__ == "__main__":
                         help="Directory of animations to play on the hour.")
     parser.add_argument("--weather-dir", type=str, default=DEFAULT_WEATHER_DIRECTORY,
                         help="directory of animations chosen by the weather")
+    parser.add_argument("--network-state", type=str,
+                        default=provisioning.DEFAULT_STATE_PATH,
+                        help="file comitup's callback writes the network state to")
     parser.add_argument("--background-dir", type=str, default=DEFAULT_BACKGROUND_DIRECTORY,
                         help="Directory of animations that play behind the time.")
     parser.add_argument("--gif", type=str, default=None,
