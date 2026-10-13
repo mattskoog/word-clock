@@ -182,22 +182,14 @@ joined their network.
   the network as above, and run through it as your friend will — phone only, no
   terminal. This is the only test that counts.
 
-## What to put on the card
+## The card for the box
 
-> **Setting up your clock**
->
-> 1. Plug it in. The face will show slow orange rings.
-> 2. On your phone, join the Wi-Fi network **wordclock-setup**.
->    (Password: `........` — drop this line if you left the hotspot open.)
-> 3. A page will open. Choose your home Wi-Fi and enter its password.
-> 4. The clock turns green, then starts telling the time.
->
-> To change colours, brightness or the weather location, visit
-> **http://wordclock.local:8080** from any device on your Wi-Fi.
->
-> Changed your Wi-Fi or moved house? Leave the clock plugged in. After a few
-> minutes it will show the orange rings again by itself — then just start again
-> from step 1.
+[setup_card.md](setup_card.md) is the whole thing, written for somebody who has
+never heard of a Raspberry Pi: six steps, what each colour on the face means,
+and what to do when their Wi-Fi changes. Print it, or hand it over as a link.
+
+Keep it as the one source of truth rather than rewriting the steps here — if
+you change the hotspot name or set a password, that is the file to edit.
 
 ## If something goes wrong
 
