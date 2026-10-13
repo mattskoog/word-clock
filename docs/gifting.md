@@ -52,12 +52,35 @@ In `/etc/comitup.conf`:
 
 ```
 ap_name: wordclock-setup
+```
+
+### Whether to set a password
+
+`ap_password` is optional and comitup leaves the hotspot open without it. It is
+worth thinking about rather than reaching for by reflex, because the hotspot is
+not up briefly: it stays up until somebody configures the clock, which might be
+days if it sits unopened, and it returns indefinitely after a router change.
+
+What an open hotspot exposes is small. Somebody in range could join it and use
+the portal to point the clock at another network, or change its settings on port
+8080. They cannot learn the owner's Wi-Fi password — the clock is not on that
+network yet, and the portal never shows stored credentials — and there is
+nothing on a clock worth taking.
+
+What a password costs is not small. Lose the card and the clock cannot be set
+up at all without the person who built it, which is the kind of dependency this
+whole guide exists to avoid.
+
+So: leave it open for a normal house, where the clock will be set up within a
+day or two. Set one for a flat or a dense terrace, where strangers are
+permanently in range and it may broadcast for a week:
+
+```
 ap_password: <8 to 63 characters>
 ```
 
-Set a password. The window during which the hotspot is open is short, but
-while it is open anyone in range can configure the clock. Print the password
-on the card that goes in the box.
+If you do, tape a copy underneath the clock as well as printing it on the card,
+so a lost card is an inconvenience rather than a phone call to you.
 
 Keep `ap_name` **different** from the hostname you set below. Both are
 advertised over mDNS, and if they collide avahi renames one to
@@ -165,7 +188,7 @@ joined their network.
 >
 > 1. Plug it in. The face will show slow orange rings.
 > 2. On your phone, join the Wi-Fi network **wordclock-setup**.
->    Password: `........`
+>    (Password: `........` — drop this line if you left the hotspot open.)
 > 3. A page will open. Choose your home Wi-Fi and enter its password.
 > 4. The clock turns green, then starts telling the time.
 >
