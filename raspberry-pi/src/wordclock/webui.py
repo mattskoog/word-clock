@@ -1074,6 +1074,42 @@ el('detect-timezone').onclick = function () {
   }
 };
 
+/* The clock does not know where it is; the device reading this page does. The
+   interface is only reachable from the same network, so the two are in the
+   same place in practice, and adopting the device's zone without being asked
+   is what keeps a clock right for somebody who would never think to press
+   Detect - the person a clock was given to, or anyone who has just moved. */
+var checkedDeviceZone = false;
+
+function adoptDeviceTimezone() {
+  if (checkedDeviceZone) return;
+  checkedDeviceZone = true;
+  // Never overrule an edit in progress. The next clean load will catch it.
+  if (dirty) return;
+  var zone = null;
+  try {
+    zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch (error) {
+    return;
+  }
+  if (!zone || zone === state.settings.timezone) return;
+
+  var was = state.settings.timezone;
+  // Only the one key, so anything else the clock is doing is left alone.
+  api('/api/settings', { timezone: zone }).then(function (next) {
+    // A zone this device knows and the clock does not is no reason to touch
+    // a setting that is already working.
+    if (next.errors && next.errors.timezone) return;
+    state = next;
+    if (!dirty) draft = copy(next.settings);
+    render();
+    refreshPreview();
+    setStatus(was
+      ? 'Time zone updated to ' + zone + ', to match the device you are reading this on.'
+      : 'Time zone set to ' + zone + ', from the device you are reading this on.', false);
+  }).catch(function () {});
+}
+
 /* ---------- startup and polling ---------- */
 
 function pollState() {
@@ -1100,6 +1136,7 @@ api('/api/state').then(function (next) {
   // that must not be what stops the preview from appearing.
   refreshPreview();
   render();
+  adoptDeviceTimezone();
   return api('/api/timezones');
 }).then(function (data) {
   zoneNames = (data && data.timezones) || [];

@@ -688,6 +688,23 @@ for key in ("theme", "brightness", "timezone", "gif_name", "background", "bogus"
     check(f"{key} is rejected when invalid", key in errors)
 
 check("zone list is populated", len(timekeeper.zone_names()) > 300)
+
+# The interface adopts the viewing device's zone without being asked, which it
+# does by sending that one key on its own. Two things have to hold for that to
+# be safe: the update must touch nothing else, and a zone the clock does not
+# know must leave the working one alone rather than blanking it.
+tz_settings = fresh_settings(library, timezone="Europe/Warsaw", brightness=0.4,
+                             theme="solid")
+applied, errors = tz_settings.update({"timezone": "America/Chicago"})
+check("a timezone-only update is applied",
+      tz_settings.get("timezone") == "America/Chicago", applied)
+check("and disturbs nothing else",
+      tz_settings.get("brightness") == 0.4 and tz_settings.get("theme") == "solid",
+      (tz_settings.get("brightness"), tz_settings.get("theme")))
+_, errors = tz_settings.update({"timezone": "Mars/Olympus"})
+check("an unknown zone is refused", "timezone" in errors, errors)
+check("and the working zone survives it",
+      tz_settings.get("timezone") == "America/Chicago", tz_settings.get("timezone"))
 for place, lat, lon, expected in [("Warsaw", 52.23, 21.01, "Europe/Warsaw"),
                                   ("Tokyo", 35.68, 139.69, "Asia/Tokyo")]:
     check(f"locate {place}", timekeeper.nearest_timezone(lat, lon) == expected)

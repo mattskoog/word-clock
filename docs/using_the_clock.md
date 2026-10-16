@@ -236,6 +236,25 @@ In the web interface, the time zone is a dropdown listing every zone the Pi
 actually has data for (around 420), grouped by region. Choosing one applies
 immediately. **System default** follows whatever `timedatectl` is set to.
 
+### It sets itself
+
+Opening the web interface quietly checks the time zone of the device you are
+reading it on, and if the clock disagrees it corrects itself and says so under
+the time zone picker. No button to press.
+
+This is safe because the interface is only reachable from the clock's own
+network, so the device reading it and the clock are in the same place. It
+matters most for a clock nobody is administering — one given as a gift, or one
+that moved house with its owner — where otherwise the time would stay wrong
+until somebody thought to look.
+
+It will not overrule an edit in progress: if you have unsaved changes the check
+is skipped and runs on the next clean load. A zone the clock has no data for is
+ignored rather than applied, so a working setting is never blanked by one.
+
+To pin a zone that is deliberately not the local one, set it from the dropdown
+and the clock keeps it until it is next opened from a device in another zone.
+
 ### The Detect button
 
 **Detect** fills in the time zone of the phone or laptop you are browsing from,
