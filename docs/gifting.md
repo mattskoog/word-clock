@@ -27,10 +27,18 @@ They never see a terminal, and they never give anyone their password.
 ## Before you start
 
 Build and test the clock exactly as in
-[installation_raspberry.md](installation_raspberry.md) first, on your own
-network. Get the LEDs working and the web interface reachable. Only then add
-provisioning — otherwise a clock that does not light up has two possible
-causes instead of one.
+[installation_raspberry.md](installation_raspberry.md) first. Get the LEDs
+working and the web interface reachable. Only then add provisioning —
+otherwise a clock that does not light up has two possible causes instead of
+one.
+
+**Build it on your phone's hotspot rather than your home Wi-Fi.** Put the
+hotspot's name and password into Raspberry Pi Imager in place of your own
+network. It costs nothing during the build, and it buys the best test
+available at the end: switching the hotspot off makes a known network vanish,
+which is exactly what happens when somebody replaces their router, and you can
+switch it back on to recover SSH if anything goes wrong. Deleting your home
+network, the obvious alternative, is a one-way door.
 
 ## 1. Install comitup
 
@@ -174,13 +182,47 @@ joined their network.
 - **Delete `raspberry-pi/wordclock.json`.** It is gitignored, so a fresh clone
   has none, but if you copied your own card you will have shipped your zip code
   and time zone. The clock writes a fresh one on first save.
-- **Forget your own network**: `sudo nmcli connection delete <your-ssid>`.
-  Otherwise the clock joins yours at your house and never shows the hotspot, and
+- **Forget the networks you joined while building** — see Testing it below.
+  Otherwise the clock rejoins one at your house, never shows the hotspot, and
   you will not have tested the thing you are relying on.
 - **Change the default password** on the `comitup` (or `pi`) user.
-- **Test it cold.** Take it somewhere out of range of your network, or forget
-  the network as above, and run through it as your friend will — phone only, no
-  terminal. This is the only test that counts.
+
+### Testing it
+
+Two tests, and they prove different things.
+
+**The fallback**, with the clock on your desk: switch your phone's hotspot off.
+A known network has just disappeared, which is the router-change case, and
+within a couple of minutes the face should go orange by itself. Switching the
+hotspot back on gets you SSH again, so this one is safe to repeat.
+
+**The cold boot**, which is the one that counts. Look at what the clock has
+saved, and delete the ones you joined during the build — your hotspot, and any
+network you tried along the way:
+
+```bash
+nmcli -f NAME,TYPE connection show
+```
+
+```bash
+sudo nmcli connection delete "<your phone hotspot>"
+```
+
+Delete by name, one at a time. Leave comitup's own hotspot connection alone —
+it is a wifi connection too, named after `ap_name`, and it is the thing that
+serves the setup page.
+
+Then reboot and run through it as they will — phone only, no terminal. Orange
+rings, join `wordclock-setup`, pick a network, blue, green, the time.
+
+Only this proves the part nothing else can: that the captive portal actually
+opens by itself on a real phone. That behaviour varies by phone and by OS
+version, it is the most fragile thing in the whole arrangement, and no amount
+of testing over SSH will tell you about it.
+
+Deleting your hotspot takes SSH with it, so do this last. If you need to get
+back in afterwards, set the clock up through the portal onto your hotspot
+again — which is itself a rehearsal of what your friend will do.
 
 ## The card for the box
 
