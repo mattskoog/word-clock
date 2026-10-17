@@ -17,11 +17,11 @@ working, and waiting for your Wi-Fi.
 
 **2. Join the clock's own network.**
 
-On your phone: **Settings → Wi-Fi**, and choose **`wordclock-setup`**.
+On your phone: **Settings → Wi-Fi**, and choose **`word-clock-setup`**.
 
 **3. A setup page opens by itself**, the way a hotel Wi-Fi page does.
 
-If it does not, open a browser and go to **http://wordclock-setup.local**
+If it does not, open a browser and go to **http://word-clock-setup.local**
 
 **4. Choose your home Wi-Fi** from the list and enter its password.
 
@@ -37,7 +37,7 @@ Your phone goes back to your usual Wi-Fi on its own.
 
 **6. Make it yours.**
 
-Visit **http://wordclock.local:8080** from any phone or laptop on your Wi-Fi to
+Visit **http://word-clock.local:8080** from any phone or laptop on your Wi-Fi to
 change colours and brightness, pick an animation for each hour, or have the
 background follow your local weather.
 
@@ -50,7 +50,7 @@ background follow your local weather.
 | Orange rings, still | It is waiting for step 2. Nothing is broken. |
 | Blue sweep, then orange rings again | The Wi-Fi password was probably wrong. Try step 2 again. |
 | Nothing at all | Check it is plugged in properly. |
-| `wordclock.local` will not load | Make sure you are on the same Wi-Fi as the clock. |
+| `word-clock.local` will not load | Make sure you are on the same Wi-Fi as the clock. |
 
 **Changed your Wi-Fi, or moved house?** Leave the clock plugged in. After a few
 minutes the orange rings come back on their own — then start again from step 2.

@@ -14,12 +14,12 @@ later needs nothing from you.
 
 1. Plug the clock in. It cannot find a network, so it broadcasts its own and
    the face shows slow amber rings — it is waiting for someone.
-2. Join `wordclock-setup` from a phone. A page opens by itself, the way a hotel
+2. Join `word-clock-setup` from a phone. A page opens by itself, the way a hotel
    Wi-Fi page does.
 3. Pick their network from the list, type their password.
 4. The face sweeps blue while it connects, flashes green when it works, then
    starts telling the time.
-5. For time zone and weather, they visit `http://wordclock.local:8080` on any
+5. For time zone and weather, they visit `http://word-clock.local:8080` on any
    device on their network. **Detect** sets the time zone from their phone.
 
 They never see a terminal, and they never give anyone their password.
@@ -32,13 +32,21 @@ working and the web interface reachable. Only then add provisioning —
 otherwise a clock that does not light up has two possible causes instead of
 one.
 
-**Build it on your phone's hotspot rather than your home Wi-Fi.** Put the
-hotspot's name and password into Raspberry Pi Imager in place of your own
-network. It costs nothing during the build, and it buys the best test
-available at the end: switching the hotspot off makes a known network vanish,
-which is exactly what happens when somebody replaces their router, and you can
-switch it back on to recover SSH if anything goes wrong. Deleting your home
-network, the obvious alternative, is a one-way door.
+**Build on your own network, under a distinct hostname.** Give the clock a
+name your own devices do not use — see Hostname below — and there is no reason
+not to use your normal Wi-Fi, with the broadband and the stable connection that
+come with it.
+
+Do not build on a phone hotspot, however tempting it is as a way to rehearse
+the setup later. iOS shuts Personal Hotspot down whenever nothing has been
+connected to it for a minute or two, and this build powers the Pi down twice —
+once to solder, once after. Each time, the hotspot quietly disappears and the
+Pi comes back up with no network to join, which looks exactly like a dead Pi, a
+corrupt card or a wiring fault. It is a miserable thing to debug and it is
+entirely self-inflicted.
+
+The hotspot is still the best way to test the fallback, but add it at the end
+instead, when the clock is otherwise finished — see Testing it.
 
 ## 1. Install comitup
 
@@ -59,7 +67,7 @@ interface, so NetworkManager and comitup are the only things managing it.
 In `/etc/comitup.conf`:
 
 ```
-ap_name: wordclock-setup
+ap_name: word-clock-setup
 ```
 
 ### Whether to set a password
@@ -90,9 +98,9 @@ ap_password: <8 to 63 characters>
 If you do, tape a copy underneath the clock as well as printing it on the card,
 so a lost card is an inconvenience rather than a phone call to you.
 
-Keep `ap_name` **different** from the hostname you set below. Both are
-advertised over mDNS, and if they collide avahi renames one to
-`wordclock-2.local`, which is a confusing thing for a new owner to discover.
+`ap_name` is advertised over mDNS as well as being the hotspot's name, so it
+has to differ from the hostname — `word-clock-setup` against `word-clock`.
+See Hostname below for what happens when mDNS names collide.
 
 ## 3. Show the setup state on the face
 
@@ -170,20 +178,30 @@ new password through the portal replaces them.
 
 ## 4. Hostname
 
+Set it to `word-clock` in Raspberry Pi Imager when you write the card, which
+saves a step. After the fact it is:
+
 ```bash
-sudo raspi-config    # System Options → Hostname → wordclock
+sudo hostnamectl set-hostname word-clock
 ```
 
-This is what puts the clock at `http://wordclock.local:8080` once it has
+This is what puts the clock at `http://word-clock.local:8080` once it has
 joined their network.
+
+**Give it a different name to any clock you already own.** Two devices
+claiming one mDNS name on the same network makes avahi rename whichever
+arrives second to `word-clock-2.local`, and you will waste an afternoon
+unsure which clock you are talking to. `word-clock` for the gift against
+`wordclock` for your own is enough, and it means you can build on your own
+network without a collision.
 
 ## 5. Before you box it up
 
 - **Delete `raspberry-pi/wordclock.json`.** It is gitignored, so a fresh clone
   has none, but if you copied your own card you will have shipped your zip code
   and time zone. The clock writes a fresh one on first save.
-- **Forget the networks you joined while building** — see Testing it below.
-  Otherwise the clock rejoins one at your house, never shows the hotspot, and
+- **Forget every network you joined while building** — see Testing it below.
+  Otherwise the clock rejoins yours at your house, never shows the hotspot, and
   you will not have tested the thing you are relying on.
 - **Change the default password** on the `comitup` (or `pi`) user.
 
@@ -191,21 +209,32 @@ joined their network.
 
 Two tests, and they prove different things.
 
-**The fallback**, with the clock on your desk: switch your phone's hotspot off.
-A known network has just disappeared, which is the router-change case, and
-within a couple of minutes the face should go orange by itself. Switching the
-hotspot back on gets you SSH again, so this one is safe to repeat.
+**The fallback.** Clock on the desk, finished and working. Add your phone's
+hotspot as a second network, so there is something safe to take away:
+
+```bash
+sudo nmcli --ask device wifi connect "<your hotspot ssid>"
+```
+
+Now switch the hotspot off. A known network has just disappeared, which is the
+router-change case, and within a couple of minutes the face should go orange by
+itself. Switching the hotspot back on brings the clock back and returns SSH, so
+this test is repeatable.
+
+Keep a device — your laptop — joined to the hotspot throughout, or iOS will
+switch it off on its own and you will be testing your phone rather than the
+clock.
 
 **The cold boot**, which is the one that counts. Look at what the clock has
-saved, and delete the ones you joined during the build — your hotspot, and any
-network you tried along the way:
+saved, and delete the ones you joined during the build — your own network, the
+hotspot, and anything else you tried:
 
 ```bash
 nmcli -f NAME,TYPE connection show
 ```
 
 ```bash
-sudo nmcli connection delete "<your phone hotspot>"
+sudo nmcli connection delete "<your network>"
 ```
 
 Delete by name, one at a time. Leave comitup's own hotspot connection alone —
@@ -213,7 +242,7 @@ it is a wifi connection too, named after `ap_name`, and it is the thing that
 serves the setup page.
 
 Then reboot and run through it as they will — phone only, no terminal. Orange
-rings, join `wordclock-setup`, pick a network, blue, green, the time.
+rings, join `word-clock-setup`, pick a network, blue, green, the time.
 
 Only this proves the part nothing else can: that the captive portal actually
 opens by itself on a real phone. That behaviour varies by phone and by OS
@@ -240,7 +269,7 @@ you change the hotspot name or set a password, that is the file to edit.
 | Nothing at all | Power. Check the supply before anything else. |
 | Orange rings forever | It is waiting — the hotspot is up and nobody has joined it. Normal after a router change. |
 | Blue sweep, then orange rings again | Wrong Wi-Fi password, most likely. The rings mean it is ready for another try. |
-| Time shows but `wordclock.local` will not load | mDNS. Find the clock's IP in the router's device list and use that instead. |
+| Time shows but `word-clock.local` will not load | mDNS. Find the clock's IP in the router's device list and use that instead. |
 | Hotspot never appears | Comitup is not running, or a known network is in range. `sudo systemctl status comitup`. |
 
 The Pi Zero W has one radio and is **2.4GHz only**. It cannot keep the hotspot
