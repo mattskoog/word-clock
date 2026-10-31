@@ -1165,17 +1165,18 @@ function adoptDeviceTimezone() {
 
 function commitLabel(commit) {
   if (!commit || !commit.version) return '\u2014';
-  var detail = [];
+  // Version and date only. The commit subject is developer detail, and when
+  // the commit happens to be the version bump it just says the same thing
+  // twice.
+  var when = '';
   if (commit.date) {
     var d = new Date(commit.date);
     if (!isNaN(d)) {
-      detail.push(d.toLocaleDateString(undefined,
-        { day: 'numeric', month: 'short' }));
+      when = '<span> \u00b7 ' + d.toLocaleDateString(undefined,
+        { day: 'numeric', month: 'short' }) + '</span>';
     }
   }
-  if (commit.subject) detail.push(commit.subject);
-  return commit.version
-    + (detail.length ? '<span> \u00b7 ' + detail.join(' \u00b7 ') + '</span>' : '');
+  return commit.version + when;
 }
 
 function setUpdateStatus(message, isError) {
