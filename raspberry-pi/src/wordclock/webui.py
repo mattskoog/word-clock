@@ -400,7 +400,7 @@ PAGE_TEMPLATE = """<!doctype html>
       <div class="row">
         <div style="flex:1">
           <label for="background-brightness">Animation brightness</label>
-          <input type="range" id="background-brightness" min="0" max="1" step="0.01">
+          <input type="range" id="background-brightness" min="0" max="1000" step="1">
         </div>
         <div class="value" id="background-brightness-value"></div>
       </div>
@@ -444,6 +444,25 @@ var savedTimer = null;
 
 function el(id) { return document.getElementById(id); }
 function copy(value) { return JSON.parse(JSON.stringify(value)); }
+
+// A background is usable between about 1% and 3%, and unusable much above it:
+// an LED behind a letter is a point source in a dark room. On a plain 0-100
+// slider that whole range is the first three notches, which is why setting it
+// by hand meant reaching for curl. So the travel is squared and the top is
+// 10% rather than 100%, which puts 1-3% across the middle of the slider while
+// still leaving headroom for a brighter room or a different diffuser.
+var BG_CEILING = 0.10;
+var BG_STEPS = 1000;
+
+function bgFromSlider(position) {
+  var fraction = Math.min(1, Math.max(0, position / BG_STEPS));
+  return Math.round(BG_CEILING * fraction * fraction * 1000) / 1000;
+}
+
+function bgToSlider(value) {
+  var fraction = Math.sqrt(Math.min(1, Math.max(0, (value || 0) / BG_CEILING)));
+  return Math.round(fraction * BG_STEPS);
+}
 
 // Filenames make poor labels. The value stays the real name on disk, so only
 // what the eye reads changes: "heart_art_small.gif" shows as "Heart art small".
@@ -670,10 +689,12 @@ function renderBackground() {
       + 'The hourly animation still takes the whole face.';
   if (source === 'weather') renderWeather();
   if (document.activeElement !== el('background-brightness')) {
-    el('background-brightness').value = draft.background_brightness;
+    el('background-brightness').value = bgToSlider(draft.background_brightness);
   }
+  // The real figure, not the slider's position, so it stays comparable with
+  // anything set through the API and with what the docs quote.
   el('background-brightness-value').textContent =
-    Math.round(draft.background_brightness * 100) + '%';
+    (draft.background_brightness * 100).toFixed(1) + '%';
 }
 
 var renderedGifs = null;
@@ -910,7 +931,7 @@ function renderWeather() {
   }
 }
 el('background-brightness').oninput = function () {
-  draft.background_brightness = Number(this.value);
+  draft.background_brightness = bgFromSlider(Number(this.value));
   changed();
 };
 el('gif-duration').oninput = function () { draft.gif_duration = Number(this.value); changed(); };

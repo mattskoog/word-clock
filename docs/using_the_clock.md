@@ -145,7 +145,11 @@ setting means the same thing whichever animation you pick, and moving one
 slider never moves the other.
 
 **Expect to run it very low.** It defaults to 2%, and 1-3% is the usable range
-on real LEDs. That reads as implausible on screen and is right on the wall: an
+on real LEDs. The slider is shaped for that: its travel is squared and it tops
+out at 10% rather than 100%, so 1% sits around a third of the way along and 3%
+around halfway, instead of the whole useful range being the first three
+notches. The figure beside it is the real percentage, so it still matches what
+the API reports. That reads as implausible on screen and is right on the wall: an
 LED behind a letter is a point source in a dark room, and much above a few
 percent the background stops sitting behind the time and starts competing with
 it.
