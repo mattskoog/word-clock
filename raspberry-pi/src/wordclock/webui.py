@@ -1163,20 +1163,22 @@ function adoptDeviceTimezone() {
 
 /* ---------- software updates ---------- */
 
-function commitLabel(commit) {
+function commitLabel(commit, headline) {
   if (!commit || !commit.version) return '\u2014';
-  // Version and date only. The commit subject is developer detail, and when
-  // the commit happens to be the version bump it just says the same thing
-  // twice.
-  var when = '';
+  // The subject rides along only on the version being offered, where it is
+  // the headline for what you would be getting. On the running version it is
+  // just the last thing that happened, which nobody needs.
+  var detail = [];
   if (commit.date) {
     var d = new Date(commit.date);
     if (!isNaN(d)) {
-      when = '<span> \u00b7 ' + d.toLocaleDateString(undefined,
-        { day: 'numeric', month: 'short' }) + '</span>';
+      detail.push(d.toLocaleDateString(undefined,
+        { day: 'numeric', month: 'short' }));
     }
   }
-  return commit.version + when;
+  if (headline && commit.subject) detail.push(commit.subject);
+  return commit.version
+    + (detail.length ? '<span> \u00b7 ' + detail.join(' \u00b7 ') + '</span>' : '');
 }
 
 function setUpdateStatus(message, isError) {
@@ -1198,12 +1200,12 @@ function setUpdateBusy(label) {
 
 function renderUpdates() {
   var u = (state && state.update) || {};
-  el('version-running').innerHTML = commitLabel(u.running);
+  el('version-running').innerHTML = commitLabel(u.running, false);
 
   var waiting = u.behind > 0 && !u.diverged;
   el('version-available-label').hidden = !waiting;
   el('version-available').hidden = !waiting;
-  if (waiting) el('version-available').innerHTML = commitLabel(u.available);
+  if (waiting) el('version-available').innerHTML = commitLabel(u.available, true);
 
   if (!updateBusy) {
     // One button, because checking and updating are not alternatives - one

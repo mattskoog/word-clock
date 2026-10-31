@@ -250,6 +250,17 @@ once a check has found something — whether you pressed the button or the
 clock's own twice-daily check did — the same button becomes **Update and
 restart**, and the version on offer is listed above it.
 
+The version on offer carries a one-line headline describing what the update
+brings. The running version does not: what the last change was called is of no
+use once you already have it.
+
+Note for anyone committing to this repository: **that headline is the subject
+line of whatever commit is at the tip of `main`**, so it is read by people who
+own clocks, not by developers. Write it as a release headline — "Weather
+backgrounds now follow your local forecast", not "fix off-by-one in
+background_frame". The body of the commit is still the place for the
+reasoning.
+
 It never says how many commits behind it is. Updating goes to the newest
 version whether that is one change or twenty, so the count would be a number
 nobody can act on.
