@@ -760,6 +760,17 @@ except updater.UpdateError as error:
     check("applying with nothing to apply is refused",
           "up to date" in str(error), str(error))
 
+# A branch that exists only on the clock is a normal state mid-development,
+# so it gets a message naming the branch rather than git's own wording.
+sh("git", "checkout", "-q", "-b", "only-here", cwd=clone)
+try:
+    updater.check(clone)
+    check("a branch not on the remote is explained", False, "it was allowed")
+except updater.UpdateError as error:
+    check("a branch not on the remote is explained",
+          "only-here" in str(error) and "Push it first" in str(error), str(error))
+sh("git", "checkout", "-q", "main", cwd=clone)
+
 # A detached head has no upstream, so there is nothing to compare against.
 sh("git", "checkout", "-q", "--detach", cwd=fresh)
 try:

@@ -297,6 +297,8 @@ Two cases it refuses, and says so rather than guessing:
 - **The clock has changes of its own.** Somebody edited it directly, a
   fast-forward would fail, and discarding their work silently would be worse.
 - **The checkout is not on a branch**, so there is no upstream to compare with.
+- **The branch is not on the remote yet**, which is the normal state while
+  someone is working on one. It names the branch and says to push it.
 
 And one it flags without acting on: an update that changes
 `requirements.txt` or `install.sh` needs a terminal afterwards, for `pip` or

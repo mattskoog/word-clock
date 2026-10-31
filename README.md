@@ -46,6 +46,8 @@ word-clock-main/
 ### Raspberry Pi
 
 Docs for Raspberry Pi installation can be found [here](docs/installation_raspberry.md).
+Working on the web interface? `raspberry-pi/tools/dev-server.py` runs the whole
+clock on a laptop with the LEDs stubbed out.
 Building one for somebody else? [Making it a gift](docs/gifting.md) sets the
 clock up to ask for their Wi-Fi itself, so it needs no terminal and no password
 handed over.

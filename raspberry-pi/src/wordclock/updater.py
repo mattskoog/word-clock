@@ -142,7 +142,17 @@ def check(repository, fetch=True, runner=None):
         raise UpdateError("This clock is not on a branch, so it cannot update "
                           "itself.")
     if fetch:
-        _git(repository, "fetch", "--quiet", "origin", branch, runner=runner)
+        try:
+            _git(repository, "fetch", "--quiet", "origin", branch, runner=runner)
+        except UpdateError as error:
+            # A branch that exists only on this clock is a normal state while
+            # someone is working on it, so say which branch and why rather
+            # than passing git's wording through.
+            if "couldn't find remote ref" in str(error):
+                raise UpdateError(
+                    f"Branch '{branch}' is not on the remote yet, so there is "
+                    f"nothing to compare against. Push it first.")
+            raise
 
     upstream = f"origin/{branch}"
     behind = int(_git(repository, "rev-list", "--count", f"HEAD..{upstream}",
