@@ -250,6 +250,10 @@ once a check has found something — whether you pressed the button or the
 clock's own twice-daily check did — the same button becomes **Update and
 restart**, and the version on offer is listed above it.
 
+It never says how many commits behind it is. Updating goes to the newest
+version whether that is one change or twenty, so the count would be a number
+nobody can act on.
+
 While a check runs the button shows a spinner and reads *Checking*, because a
 fetch is a network round trip of unpredictable length. The result appears
 beside the button rather than in a dialog: it needs no decision from you, and

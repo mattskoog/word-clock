@@ -1222,13 +1222,13 @@ function renderUpdates() {
   }
   var parts = [];
   if (waiting) {
-    parts.push(u.behind + (u.behind === 1 ? ' update' : ' updates') + ' available.');
+    // Never a count. Updating goes to the tip whether that is one commit
+    // ahead or twenty, so the number would be detail nobody can act on.
+    parts.push('Update available.');
     if (u.notes && u.notes.length) {
       parts.push('Includes ' + u.notes.join(' and ')
         + ', which needs a terminal after installing.');
     }
-  } else if (u.checked_at) {
-    parts.push('Up to date.');
   }
   if (u.checked_at) {
     parts.push('Last checked ' + new Date(u.checked_at * 1000)
