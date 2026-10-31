@@ -195,7 +195,7 @@ class WordClock:
 
         # Normalised on the animation's brightest pixel so every background
         # sits at the same level for a given setting, whatever it was drawn at.
-        scale = (255.0 * current.get("background_brightness", 0.25)) / peak
+        scale = (255.0 * current.get("background_brightness", 0.02)) / peak
 
         for y, row in enumerate(grid):
             for x, color in enumerate(row):

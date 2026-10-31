@@ -37,7 +37,10 @@ DEFAULTS = {
     # the switch is off.
     "background_enabled": False,
     "background": "",
-    "background_brightness": 0.25,
+    # 2%, which sounds absurd and is not: an LED behind a letter is a point
+    # source in a dark room, and anything above a few percent stops being a
+    # background and starts competing with the time. Found on real hardware.
+    "background_brightness": 0.02,
     # Where the background comes from: an animation picked by hand, or live
     # weather. The hand-picked one is remembered either way, and is what the
     # clock falls back to when the weather cannot be read.

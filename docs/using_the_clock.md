@@ -139,10 +139,16 @@ A filename beginning with `_` is kept in the folder but left out of the picker,
 which is how an animation is retired without deleting it. The same goes for the
 hourly ones.
 
-**Background brightness** is measured against the time, not against full scale.
-At 25% the animation's brightest pixel is a quarter as bright as the brightest
-lit letter, and that ratio holds whichever theme is running - so a dark theme
-like the Night phase is not swamped by a vivid animation behind it.
+**Background brightness** is independent of the text. The animation is
+normalised against its own brightest pixel, taken across the whole loop, so the
+setting means the same thing whichever animation you pick, and moving one
+slider never moves the other.
+
+**Expect to run it very low.** It defaults to 2%, and 1-3% is the usable range
+on real LEDs. That reads as implausible on screen and is right on the wall: an
+LED behind a letter is a point source in a dark room, and much above a few
+percent the background stops sitting behind the time and starts competing with
+it.
 
 Drop your own files into `raspberry-pi/backgrounds/` and they appear in the
 picker too. Setting a background makes the display animated, so it redraws
@@ -305,7 +311,7 @@ than crashing the clock.
   "gif_duration": 6.0,
   "background_enabled": false,
   "background": "",
-  "background_brightness": 0.25,
+  "background_brightness": 0.02,
   "hour_gifs": {
     "1": "sun.gif",
     "2": "",

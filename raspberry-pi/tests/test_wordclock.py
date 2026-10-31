@@ -29,6 +29,7 @@ import gif as gif_module
 import main as wordclock_main
 import themes
 import provisioning
+import settings as settings_module
 import timekeeper
 import weather
 import webui
@@ -237,6 +238,13 @@ check("and switching it off makes it static again",
 # only a curated few are offered as backgrounds
 offered = backgrounds.names()
 check("five backgrounds are offered", len(offered) == 5, offered)
+
+# A clock ships with whatever this says, and the first thing its new owner sees
+# is a background at that level. On real LEDs anything much above a few percent
+# competes with the time instead of sitting behind it, so this is pinned: it
+# drifting upward is a defect, not a preference.
+shipped = settings_module.DEFAULTS["background_brightness"]
+check("the background ships dim", 0 < shipped <= 0.05, shipped)
 
 # A leading underscore shelves a file: it stays in the folder but is kept out
 # of the picker, so one can be retired and brought back with a rename. Built
