@@ -128,6 +128,9 @@ class NetworkDisplay:
         self._checked_at = now
         state = read_state(self.path) if self.path else ""
         if state != self._state:
+            # A handful of these in a clock's whole life, and they explain what
+            # the face was doing at the time.
+            print(f"Network state: {state or 'none'}", flush=True)
             self._state = state
             self._since = now
 

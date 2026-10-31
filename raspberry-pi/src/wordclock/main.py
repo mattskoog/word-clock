@@ -89,6 +89,15 @@ def run(clock_display_hal, word_clock, settings, gif_library, network=None):
             )
 
         if animation:
+            # Logged because the alternative is inferring from the LEDs. A
+            # crash loop replays this on every restart, and one line per play
+            # in the journal is the difference between seeing that at a glance
+            # and guessing at it. flush, so the line survives the crash that
+            # makes it worth having.
+            print(f"Playing {os.path.basename(animation)} for "
+                  f"{current['gif_duration']}s "
+                  f"({'requested' if requested is not None else 'top of the hour'})",
+                  flush=True)
             gif.play(
                 animation,
                 clock_display_hal,
