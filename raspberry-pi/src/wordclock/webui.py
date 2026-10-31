@@ -439,7 +439,7 @@ PAGE_TEMPLATE = """<!doctype html>
   </section>
 
   <section id="software-section">
-    <h2>Software</h2>
+    <h2>Updates</h2>
     <dl class="versions">
       <dt>Running</dt><dd id="version-running">&mdash;</dd>
       <dt id="version-available-label" hidden>Available</dt>
@@ -1164,17 +1164,18 @@ function adoptDeviceTimezone() {
 /* ---------- software updates ---------- */
 
 function commitLabel(commit) {
-  if (!commit || !commit.short) return '\u2014';
-  var when = '';
+  if (!commit || !commit.version) return '\u2014';
+  var detail = [];
   if (commit.date) {
     var d = new Date(commit.date);
     if (!isNaN(d)) {
-      when = ' \u00b7 ' + d.toLocaleDateString(undefined,
-        { day: 'numeric', month: 'short' });
+      detail.push(d.toLocaleDateString(undefined,
+        { day: 'numeric', month: 'short' }));
     }
   }
-  return commit.short + '<span>' + when + (commit.subject
-    ? ' \u00b7 ' + commit.subject : '') + '</span>';
+  if (commit.subject) detail.push(commit.subject);
+  return commit.version
+    + (detail.length ? '<span> \u00b7 ' + detail.join(' \u00b7 ') + '</span>' : '');
 }
 
 function setUpdateStatus(message, isError) {
@@ -1221,7 +1222,7 @@ function renderUpdates() {
   }
   var parts = [];
   if (waiting) {
-    parts.push(u.behind + (u.behind === 1 ? ' update' : ' updates') + ' waiting.');
+    parts.push(u.behind + (u.behind === 1 ? ' update' : ' updates') + ' available.');
     if (u.notes && u.notes.length) {
       parts.push('Includes ' + u.notes.join(' and ')
         + ', which needs a terminal after installing.');
@@ -1230,9 +1231,8 @@ function renderUpdates() {
     parts.push('Up to date.');
   }
   if (u.checked_at) {
-    parts.push('Checked ' + new Date(u.checked_at * 1000)
-      .toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-      + '. Checks twice a day on its own.');
+    parts.push('Last checked ' + new Date(u.checked_at * 1000)
+      .toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) + '.');
   }
   setUpdateStatus(parts.join(' '), false);
 }
@@ -1295,7 +1295,7 @@ function waitForClockToReturn() {
       render();
       renderUpdates();
       setUpdateStatus('Updated. Now running '
-        + ((next.update && next.update.running && next.update.running.short)
+        + ((next.update && next.update.running && next.update.running.version)
            || 'the new version') + '.');
     }).catch(function () { setTimeout(attempt, 3000); });
   })();

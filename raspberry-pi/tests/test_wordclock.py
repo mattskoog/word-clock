@@ -9,6 +9,7 @@ Only Pillow is required, which the clock needs anyway.
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -771,6 +772,26 @@ except updater.UpdateError as error:
 # comitup will not run a callback without the bit set, and neither will sh
 # run a helper it cannot execute.
 helper = os.path.join(PROJECT, "tools", "self-update.sh")
+check("the shipped VERSION is semver",
+      re.fullmatch(r"\d+\.\d+\.\d+",
+                   open(os.path.join(PROJECT, "..", "VERSION")).read().strip())
+      is not None, open(os.path.join(PROJECT, "..", "VERSION")).read().strip())
+
+# A clock from before versioning has no VERSION file, and must still say
+# something truthful rather than nothing.
+_, plain_clone, plain_sh, plain_commit = _git_repo()
+described = updater.describe(plain_clone, "HEAD")
+check("a checkout with no VERSION falls back to its commit",
+      described["version"] == described["short"], described)
+with open(os.path.join(plain_clone, "VERSION"), "w") as handle:
+    handle.write("2.0.0\n")
+plain_commit(plain_clone, "add a version")
+check("and reports the version once it has one",
+      updater.describe(plain_clone, "HEAD")["version"] == "2.0.0",
+      updater.describe(plain_clone, "HEAD"))
+check("a version is readable from a ref without checking it out",
+      updater.version_at(plain_clone, "HEAD") == "2.0.0")
+
 check("the update helper ships", os.path.isfile(helper))
 check("the update helper is executable", os.access(helper, os.X_OK))
 

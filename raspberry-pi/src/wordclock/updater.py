@@ -34,6 +34,10 @@ CHECK_SECONDS = 12 * 60 * 60
 RETRY_SECONDS = 30 * 60
 GIT_TIMEOUT = 120
 
+# Semantic version, at the repository root so it can be read out of the
+# remote with `git show origin/main:VERSION` without pulling anything.
+VERSION_FILE = "VERSION"
+
 PACKAGE_DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_REPOSITORY = os.path.abspath(
     os.path.join(PACKAGE_DIRECTORY, "..", "..", "..")
@@ -96,12 +100,33 @@ def _git(repository, *arguments, runner=None):
     return (runner or _run)(git_command(repository, list(arguments)))
 
 
+def version_at(repository, ref, runner=None):
+    """The version a ref carries, or '' for a checkout too old to have one."""
+    try:
+        if ref == "HEAD":
+            # The working tree, which is what is actually running - a commit
+            # read through git would miss an uncommitted edit.
+            with open(os.path.join(repository, VERSION_FILE)) as handle:
+                return handle.read().strip()
+        return _git(repository, "show", f"{ref}:{VERSION_FILE}",
+                    runner=runner).strip()
+    except (OSError, UpdateError):
+        return ""
+
+
 def describe(repository, ref, runner=None):
-    """A commit as the interface shows it: short id, date, subject."""
+    """A commit as the interface shows it: version, date, subject."""
     out = _git(repository, "show", "-s", "--format=%h%x1f%cI%x1f%s", ref,
                runner=runner)
     parts = (out.split("\x1f") + ["", "", ""])[:3]
-    return {"short": parts[0], "date": parts[1], "subject": parts[2]}
+    return {
+        # Falls back to the commit when there is no VERSION file, so a clock
+        # from before versioning still says something truthful.
+        "version": version_at(repository, ref, runner=runner) or parts[0],
+        "short": parts[0],
+        "date": parts[1],
+        "subject": parts[2],
+    }
 
 
 def branch_of(repository, runner=None):

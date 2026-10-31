@@ -238,7 +238,13 @@ difference between "it is cloudy" and "the clock has not managed to look".
 
 ## Keeping it up to date
 
-Under **Software** the clock shows what it is running, and a single button
+The clock carries a version in `VERSION` at the root of the repository,
+`major.minor.patch`. The interface shows the version running and, when one is
+waiting, the version on offer. A checkout from before versioning has no such
+file and falls back to showing its commit, which is what a clock built earlier
+will show until it updates once.
+
+Under **Updates** the clock shows what it is running, and a single button
 offering whichever step comes next. Normally that is **Check for updates**;
 once a check has found something — whether you pressed the button or the
 clock's own twice-daily check did — the same button becomes **Update and
