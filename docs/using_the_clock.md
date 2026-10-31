@@ -258,8 +258,20 @@ Note for anyone committing to this repository: **that headline is the subject
 line of whatever commit is at the tip of `main`**, so it is read by people who
 own clocks, not by developers. Write it as a release headline — "Weather
 backgrounds now follow your local forecast", not "fix off-by-one in
-background_frame". The body of the commit is still the place for the
-reasoning.
+background_frame".
+
+Everything technical belongs in the body, which nobody outside the repository
+sees — bullets where the change has several strands, prose where it is one
+idea that needs explaining:
+
+```
+Weather backgrounds now follow your local forecast
+
+- Conditions come from Open-Meteo, which needs no API key
+- The zip resolves once, at save time, so the clock never depends on
+  the lookup service again
+- A failed fetch keeps the last reading rather than blanking the face
+```
 
 It never says how many commits behind it is. Updating goes to the newest
 version whether that is one change or twenty, so the count would be a number
