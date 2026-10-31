@@ -176,6 +176,17 @@ the old credentials and keeps periodically retrying them — but it returns to
 the hotspot between attempts every time, so it stays reachable. Entering the
 new password through the portal replaces them.
 
+## Updates, afterwards
+
+Once the clock is in someone else's house you cannot pull and restart over SSH,
+so do not plan to. The interface has a **Software** section that checks twice a
+day and updates on a button, with a rollback if the new version will not start
+— see [Using the clock](using_the_clock.md). Telling your friend "open the
+clock's page and press Update" is the whole support procedure.
+
+It needs nothing set up here: the clock updates from whichever remote it was
+cloned from, which is the public repository.
+
 ## 4. Hostname
 
 Set it to `word-clock` in Raspberry Pi Imager when you write the card, which

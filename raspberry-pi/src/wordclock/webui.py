@@ -18,6 +18,7 @@ import gif
 import settings as settings_module
 import themes
 import timekeeper
+import updater
 import weather
 from clock_display_hal import ClockDisplayHAL
 from word_clock import CROSSFADE_SECONDS
@@ -193,6 +194,11 @@ PAGE_TEMPLATE = """<!doctype html>
     color: #e8eaf0; font-weight: 600; font-size: 14px; margin-bottom: 6px;
   }
   .hidden { display: none; }
+  .versions { margin: 0 0 14px; display: grid; grid-template-columns: auto 1fr;
+              gap: 4px 14px; font-size: 14px; }
+  .versions dt { color: #8f97ad; }
+  .versions dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .versions dd span { color: #8f97ad; }
 
   /* Preview of the clock face */
   .face {
@@ -419,6 +425,20 @@ PAGE_TEMPLATE = """<!doctype html>
     <div class="hint">Picking a zone by name keeps daylight saving correct.
       <b>Detect</b> uses the time zone of the device you are reading this on.</div>
     <div class="error" id="timezone-status"></div>
+  </section>
+
+  <section id="software-section">
+    <h2>Software</h2>
+    <dl class="versions">
+      <dt>Running</dt><dd id="version-running">&mdash;</dd>
+      <dt id="version-available-label" hidden>Available</dt>
+      <dd id="version-available" hidden></dd>
+    </dl>
+    <div class="row">
+      <button id="check-updates">Check for updates</button>
+      <button id="apply-update" class="primary" hidden>Update and restart</button>
+    </div>
+    <div class="hint" id="update-status"></div>
   </section>
   </div>
   </div>
@@ -1131,6 +1151,121 @@ function adoptDeviceTimezone() {
   }).catch(function () {});
 }
 
+/* ---------- software updates ---------- */
+
+function commitLabel(commit) {
+  if (!commit || !commit.short) return '\u2014';
+  var when = '';
+  if (commit.date) {
+    var d = new Date(commit.date);
+    if (!isNaN(d)) {
+      when = ' \u00b7 ' + d.toLocaleDateString(undefined,
+        { day: 'numeric', month: 'short' });
+    }
+  }
+  return commit.short + '<span>' + when + (commit.subject
+    ? ' \u00b7 ' + commit.subject : '') + '</span>';
+}
+
+function setUpdateStatus(message, isError) {
+  var status = el('update-status');
+  status.textContent = message;
+  status.className = isError ? 'error' : 'hint';
+}
+
+function renderUpdates() {
+  var u = (state && state.update) || {};
+  el('version-running').innerHTML = commitLabel(u.running);
+
+  var waiting = u.behind > 0 && !u.diverged;
+  el('version-available-label').hidden = !waiting;
+  el('version-available').hidden = !waiting;
+  el('apply-update').hidden = !waiting;
+  if (waiting) el('version-available').innerHTML = commitLabel(u.available);
+
+  if (u.error) { setUpdateStatus(u.error, true); return; }
+  if (u.diverged) {
+    setUpdateStatus('This clock has changes of its own, so it will not update '
+      + 'itself.', true);
+    return;
+  }
+  var parts = [];
+  if (waiting) {
+    parts.push(u.behind + (u.behind === 1 ? ' update' : ' updates')
+      + ' waiting.');
+    if (u.notes && u.notes.length) {
+      parts.push('Includes ' + u.notes.join(' and ')
+        + ', which needs a terminal after installing.');
+    }
+  } else if (u.checked_at) {
+    parts.push('Up to date.');
+  }
+  if (u.checked_at) {
+    parts.push('Checked ' + new Date(u.checked_at * 1000)
+      .toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+      + '. Checks twice a day on its own.');
+  }
+  setUpdateStatus(parts.join(' '), false);
+}
+
+el('check-updates').onclick = function () {
+  var button = this;
+  button.disabled = true;
+  setUpdateStatus('Checking\u2026');
+  api('/api/update/check', {}).then(function (next) {
+    button.disabled = false;
+    state.update = next;
+    renderUpdates();
+  }).catch(function () {
+    button.disabled = false;
+    setUpdateStatus('Could not check for updates.', true);
+  });
+};
+
+el('apply-update').onclick = function () {
+  var button = this;
+  button.disabled = true;
+  el('check-updates').disabled = true;
+  // The clock restarts into the new version, so this page goes away with it.
+  setUpdateStatus('Updating. The clock will restart \u2014 this page will '
+    + 'come back on its own in a minute.');
+  api('/api/update/apply', {}).then(function (result) {
+    if (result && result.error) {
+      button.disabled = false;
+      el('check-updates').disabled = false;
+      setUpdateStatus(result.error, true);
+      return;
+    }
+    waitForClockToReturn();
+  }).catch(function () {
+    // The restart can kill the connection before the reply arrives, which is
+    // success, not failure.
+    waitForClockToReturn();
+  });
+};
+
+function waitForClockToReturn() {
+  var deadline = Date.now() + 180000;
+  (function attempt() {
+    if (Date.now() > deadline) {
+      setUpdateStatus('The clock has not come back. It restores the previous '
+        + 'version by itself if the new one will not start \u2014 wait a '
+        + 'minute, then reload.', true);
+      return;
+    }
+    api('/api/state').then(function (next) {
+      state = next;
+      if (!dirty) draft = copy(next.settings);
+      render();
+      renderUpdates();
+      setUpdateStatus('Updated. Now running '
+        + ((next.update && next.update.running &&
+            next.update.running.short) || 'the new version') + '.');
+      el('check-updates').disabled = false;
+    }).catch(function () { setTimeout(attempt, 3000); });
+  })();
+}
+
 /* ---------- startup and polling ---------- */
 
 function pollState() {
@@ -1140,6 +1275,7 @@ function pollState() {
     // adopted while there is nothing unsaved.
     if (!dirty) draft = copy(next.settings);
     render();
+    renderUpdates();
   }).catch(function () {});
 }
 
@@ -1157,6 +1293,7 @@ api('/api/state').then(function (next) {
   // that must not be what stops the preview from appearing.
   refreshPreview();
   render();
+  renderUpdates();
   adoptDeviceTimezone();
   return api('/api/timezones');
 }).then(function (data) {
@@ -1197,7 +1334,18 @@ PAGE = PAGE_TEMPLATE.replace("<!--FACE-->", _face_markup())
 
 
 def _make_handler(settings, gif_library, background_library, word_clock,
-                  weather_watch=None):
+                  weather_watch=None, update_watch=None):
+
+    def build_update_apply():
+        """Start an update. The reply may never arrive - the restart takes
+        this process with it - so the browser treats a dropped connection as
+        success and waits for the clock to come back."""
+        if not update_watch:
+            return {"error": "Updating is not set up."}
+        try:
+            return {"started": True, "update": update_watch.apply_now()}
+        except updater.UpdateError as error:
+            return {"error": str(error)}
 
     def build_location(postcode):
         """Resolve a postcode for the browser, without saving anything.
@@ -1225,6 +1373,7 @@ def _make_handler(settings, gif_library, background_library, word_clock,
             "background_gifs": background_library.names(),
             "gif_directory": gif_library.directory,
             "weather": weather_watch.status() if weather_watch else {},
+            "update": update_watch.status() if update_watch else {},
             "crossfade": CROSSFADE_SECONDS,
             "clock": {
                 "time": timekeeper.describe(moment),
@@ -1359,6 +1508,11 @@ def _make_handler(settings, gif_library, background_library, word_clock,
                 self._send_json(build_state())
             elif self.path == "/api/gif/frames":
                 self._send_json(build_animation(body.get("name") or ""))
+            elif self.path == "/api/update/check":
+                self._send_json(update_watch.check_now() if update_watch
+                                else {"error": "Updating is not set up."})
+            elif self.path == "/api/update/apply":
+                self._send_json(build_update_apply())
             elif self.path == "/api/weather/lookup":
                 self._send_json(build_location(body.get("zip") or ""))
             elif self.path == "/api/timezone/locate":
@@ -1387,13 +1541,13 @@ def _make_handler(settings, gif_library, background_library, word_clock,
 
 
 def start(settings, gif_library, background_library, word_clock,
-          host="0.0.0.0", port=8080, weather_watch=None):
+          host="0.0.0.0", port=8080, weather_watch=None, update_watch=None):
     """Start the web server on a daemon thread. Returns the server, or None."""
     try:
         server = ThreadingHTTPServer(
             (host, port),
             _make_handler(settings, gif_library, background_library, word_clock,
-                          weather_watch))
+                          weather_watch, update_watch))
     except OSError as error:
         print(f"Web interface disabled, could not listen on {host}:{port}: {error}")
         return None

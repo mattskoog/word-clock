@@ -8,6 +8,7 @@ import gif
 import provisioning
 import themes
 import timekeeper
+import updater
 import webui
 from clock_display_hal import ClockDisplayHAL
 import weather
@@ -146,23 +147,30 @@ def main(arguments):
     # The driver stays at full: brightness is applied per layer in software.
     clock_display_hal = ClockDisplayHAL(arguments.pin, 1.0)
     network = provisioning.NetworkDisplay(arguments.network_state)
+    update_watch = updater.UpdateWatch(port=arguments.web_port)
     weather_watch = weather.WeatherWatch(settings)
     word_clock = WordClock(clock_display_hal, settings, background_library,
                            weather_library, weather_watch)
     # Its own thread: a slow link must never hold up the clock face.
     weather_watch.start()
+    # Read-only, and on its own thread: a slow fetch must not hold up the face.
+    if not arguments.no_updates:
+        update_watch.start()
 
     print(f"Config: {arguments.config}")
     print(f"Animations: {gif_directory} ({len(gif_library.names())} found)")
     print(f"Backgrounds: {arguments.background_dir} ({len(background_library.names())} found)")
     print(f"Weather: {arguments.weather_dir} ({len(weather_library.names())} found)")
     print(f"Network setup display: {provisioning.install_hint(arguments.network_state)}")
+    print(f"Updates: {'off' if arguments.no_updates else 'checking twice a day'} "
+          f"({update_watch.repository})")
     print(f"Time zone: {settings.get('timezone') or 'system default'} "
           f"({timekeeper.describe(word_clock.now())})")
 
     if not arguments.no_web:
         webui.start(settings, gif_library, background_library, word_clock,
-                    arguments.web_host, arguments.web_port, weather_watch)
+                    arguments.web_host, arguments.web_port, weather_watch,
+                    update_watch)
 
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     try:
@@ -198,6 +206,8 @@ if __name__ == "__main__":
                         help="Address the web interface listens on.")
     parser.add_argument("--web-port", type=int, default=8080,
                         help="Port the web interface listens on.")
+    parser.add_argument("--no-updates", action="store_true",
+                        help="do not check whether a newer version exists")
     parser.add_argument("--no-web", action="store_true",
                         help="Do not start the web interface.")
     main(parser.parse_args())

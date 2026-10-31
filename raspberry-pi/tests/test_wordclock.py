@@ -31,6 +31,7 @@ import themes
 import provisioning
 import settings as settings_module
 import timekeeper
+import updater
 import weather
 import webui
 from clock_display_hal import ClockDisplayHAL
@@ -680,6 +681,110 @@ time.sleep(0.8)
 check("the clock takes the face back when setup is done",
       net_clock.phrase(net_fake["t"]) == "it is fifteen minutes past three"
       and list(net_hal.pixels.buffer) != setup_showing)
+
+
+# --- updating itself --------------------------------------------------------
+
+print("\n-- updates --")
+
+
+def _git_repo():
+    """A throwaway origin and clone, so none of this touches the real one."""
+    def sh(*a, cwd=None):
+        return subprocess.run(a, cwd=cwd, capture_output=True, text=True,
+                              check=True).stdout.strip()
+
+    def commit(where, message):
+        sh("git", "add", "-A", cwd=where)
+        sh("git", "-c", "user.email=t@t", "-c", "user.name=t", "commit",
+           "-qm", message, cwd=where)
+
+    root = tempfile.mkdtemp()
+    origin = os.path.join(root, "origin")
+    clone = os.path.join(root, "clone")
+    sh("git", "init", "-q", "-b", "main", origin)
+    with open(os.path.join(origin, "a.txt"), "w") as handle:
+        handle.write("one\n")
+    commit(origin, "first")
+    sh("git", "clone", "-q", origin, clone)
+    return origin, clone, sh, commit
+
+
+origin, clone, sh, commit = _git_repo()
+state = updater.check(clone)
+check("a fresh clone is up to date", state["behind"] == 0, state["behind"])
+check("and knows what it is running", len(state["running"]["short"]) >= 7,
+      state["running"])
+check("and is not diverged", state["diverged"] is False)
+
+# Upstream moves on, and touches a file a restart alone cannot apply.
+os.makedirs(os.path.join(origin, "raspberry-pi"), exist_ok=True)
+with open(os.path.join(origin, "raspberry-pi", "requirements.txt"), "w") as handle:
+    handle.write("Pillow\n")
+commit(origin, "add a dependency")
+state = updater.check(clone)
+check("an upstream commit is seen", state["behind"] == 1, state["behind"])
+check("and is described", state["available"]["subject"] == "add a dependency",
+      state["available"])
+# Silently installing packages or rewriting the service unit would be worse
+# than saying so: the owner may have chosen a pin or a port at install time.
+check("a dependency change is flagged rather than applied",
+      state["notes"] == ["new Python packages"], state["notes"])
+
+with open(os.path.join(origin, "raspberry-pi", "install.sh"), "w") as handle:
+    handle.write("#!/bin/sh\n")
+commit(origin, "change the service")
+check("a service change is flagged too",
+      "a change to the service definition" in updater.check(clone)["notes"])
+
+# A clock somebody has edited must never have that thrown away.
+with open(os.path.join(clone, "local.txt"), "w") as handle:
+    handle.write("mine\n")
+commit(clone, "a local change")
+diverged = updater.check(clone)
+check("local commits are noticed", diverged["diverged"] is True)
+try:
+    updater.apply(clone, "fake.service", 8080, status=diverged)
+    check("applying over local changes is refused", False, "it was allowed")
+except updater.UpdateError as error:
+    check("applying over local changes is refused", "changes of its own" in str(error),
+          str(error))
+
+# Nothing to do is an error worth showing, not a silent restart.
+_, fresh, _, _ = _git_repo()
+try:
+    updater.apply(fresh, "fake.service", 8080)
+    check("applying with nothing to apply is refused", False, "it was allowed")
+except updater.UpdateError as error:
+    check("applying with nothing to apply is refused",
+          "up to date" in str(error), str(error))
+
+# A detached head has no upstream, so there is nothing to compare against.
+sh("git", "checkout", "-q", "--detach", cwd=fresh)
+try:
+    updater.check(fresh)
+    check("a detached checkout is refused", False, "it was allowed")
+except updater.UpdateError as error:
+    check("a detached checkout is refused", "not on a branch" in str(error),
+          str(error))
+
+# comitup will not run a callback without the bit set, and neither will sh
+# run a helper it cannot execute.
+helper = os.path.join(PROJECT, "tools", "self-update.sh")
+check("the update helper ships", os.path.isfile(helper))
+check("the update helper is executable", os.access(helper, os.X_OK))
+
+watch = updater.UpdateWatch(repository=clone, interval=3600)
+check("the watch reports nothing before it has looked",
+      watch.status()["checked_at"] is None, watch.status())
+check("and a check fills it in", watch.check_now()["branch"] == "main",
+      watch.status().get("branch"))
+# Root running git in a user's checkout trips git's ownership check and
+# leaves root-owned objects behind, so it drops to the owner instead.
+command = updater.git_command(clone, ["status"])
+check("git runs as the checkout's owner when it has to",
+      command[:1] == ["sudo"] or updater.repository_owner(clone) == updater._current_user(),
+      command[:4])
 
 
 # --- settings and the web API -----------------------------------------------

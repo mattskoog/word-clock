@@ -236,6 +236,37 @@ face never goes dark because the internet did.
 The interface shows the current reading under the zip code, so you can tell the
 difference between "it is cloudy" and "the clock has not managed to look".
 
+## Keeping it up to date
+
+The clock checks for a newer version twice a day and says so under
+**Software** in the interface, with a **Check for updates** button if you do
+not want to wait. It shows what it is running and what is available, both as a
+commit and a date.
+
+**It never updates itself.** Applying is always a press of **Update and
+restart**. That is deliberate: a clock given to somebody else is a clock you
+cannot reach, and a commit that breaks the render loop overnight would leave it
+dark in their house with no way in. A check is safe; an apply is a decision.
+
+Pressing it pulls, restarts, and then waits for the clock to answer again. If
+it does not come back within ninety seconds the previous version is restored
+and restarted, so a bad update costs a couple of minutes rather than a visit.
+The page reconnects by itself and tells you which version ended up running.
+
+Two cases it refuses, and says so rather than guessing:
+
+- **The clock has changes of its own.** Somebody edited it directly, a
+  fast-forward would fail, and discarding their work silently would be worse.
+- **The checkout is not on a branch**, so there is no upstream to compare with.
+
+And one it flags without acting on: an update that changes
+`requirements.txt` or `install.sh` needs a terminal afterwards, for `pip` or
+for `./install.sh`. Reinstalling the service automatically would overwrite an
+LED pin or a web port chosen at install time, so the interface says what is
+needed instead of doing it.
+
+Run with `--no-updates` to switch the checking off entirely.
+
 ## Time zone and daylight saving
 
 The Raspberry Pi has no battery-backed clock, so it gets the time from the
