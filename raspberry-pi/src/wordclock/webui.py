@@ -199,6 +199,17 @@ PAGE_TEMPLATE = """<!doctype html>
   .versions dt { color: #8f97ad; }
   .versions dd { margin: 0; font-variant-numeric: tabular-nums; }
   .versions dd span { color: #8f97ad; }
+  /* A check is a network round trip of unpredictable length. Nielsen Norman
+     put the spinner band at 2-10s and warn that text alone ("Loading...") is
+     not enough, so the label is paired with one. */
+  #update-action { min-width: 168px; }
+  .spinner {
+    display: inline-block; width: 12px; height: 12px; margin-right: 8px;
+    vertical-align: -2px; border: 2px solid currentColor; border-radius: 50%;
+    border-right-color: transparent; animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
 
   /* Preview of the clock face */
   .face {
@@ -435,10 +446,9 @@ PAGE_TEMPLATE = """<!doctype html>
       <dd id="version-available" hidden></dd>
     </dl>
     <div class="row">
-      <button id="check-updates">Check for updates</button>
-      <button id="apply-update" class="primary" hidden>Update and restart</button>
+      <button id="update-action" data-action="check">Check for updates</button>
     </div>
-    <div class="hint" id="update-status"></div>
+    <div class="hint" id="update-status" role="status" aria-live="polite"></div>
   </section>
   </div>
   </div>
@@ -1173,6 +1183,17 @@ function setUpdateStatus(message, isError) {
   status.className = isError ? 'error' : 'hint';
 }
 
+// True while a check or an apply is in flight, so a state refresh arriving
+// mid-request cannot overwrite the button's working state.
+var updateBusy = false;
+
+function setUpdateBusy(label) {
+  updateBusy = true;
+  var button = el('update-action');
+  button.disabled = true;
+  button.innerHTML = '<span class="spinner"></span>' + label;
+}
+
 function renderUpdates() {
   var u = (state && state.update) || {};
   el('version-running').innerHTML = commitLabel(u.running);
@@ -1180,8 +1201,17 @@ function renderUpdates() {
   var waiting = u.behind > 0 && !u.diverged;
   el('version-available-label').hidden = !waiting;
   el('version-available').hidden = !waiting;
-  el('apply-update').hidden = !waiting;
   if (waiting) el('version-available').innerHTML = commitLabel(u.available);
+
+  if (!updateBusy) {
+    // One button, because checking and updating are not alternatives - one
+    // leads to the other. Whichever is the next sensible step is the button.
+    var button = el('update-action');
+    button.disabled = false;
+    button.className = waiting ? 'primary' : '';
+    button.textContent = waiting ? 'Update and restart' : 'Check for updates';
+    button.dataset.action = waiting ? 'apply' : 'check';
+  }
 
   if (u.error) { setUpdateStatus(u.error, true); return; }
   if (u.diverged) {
@@ -1191,8 +1221,7 @@ function renderUpdates() {
   }
   var parts = [];
   if (waiting) {
-    parts.push(u.behind + (u.behind === 1 ? ' update' : ' updates')
-      + ' waiting.');
+    parts.push(u.behind + (u.behind === 1 ? ' update' : ' updates') + ' waiting.');
     if (u.notes && u.notes.length) {
       parts.push('Includes ' + u.notes.join(' and ')
         + ', which needs a terminal after installing.');
@@ -1208,60 +1237,66 @@ function renderUpdates() {
   setUpdateStatus(parts.join(' '), false);
 }
 
-el('check-updates').onclick = function () {
-  var button = this;
-  button.disabled = true;
-  setUpdateStatus('Checking\u2026');
+function checkForUpdates() {
+  setUpdateBusy('Checking');
+  // Reported inline rather than in a dialog: the result needs no decision,
+  // and a modal for it would interrupt to say nothing.
+  setUpdateStatus('Looking for a newer version\u2026');
   api('/api/update/check', {}).then(function (next) {
-    button.disabled = false;
+    updateBusy = false;
     state.update = next;
     renderUpdates();
   }).catch(function () {
-    button.disabled = false;
-    setUpdateStatus('Could not check for updates.', true);
+    updateBusy = false;
+    renderUpdates();
+    setUpdateStatus('Could not reach the update server. The clock carries on '
+      + 'as it is.', true);
   });
-};
+}
 
-el('apply-update').onclick = function () {
-  var button = this;
-  button.disabled = true;
-  el('check-updates').disabled = true;
-  // The clock restarts into the new version, so this page goes away with it.
-  setUpdateStatus('Updating. The clock will restart \u2014 this page will '
-    + 'come back on its own in a minute.');
+function applyUpdate() {
+  setUpdateBusy('Updating');
+  setUpdateStatus('Updating. The clock will restart \u2014 this page comes '
+    + 'back on its own in a minute.');
   api('/api/update/apply', {}).then(function (result) {
     if (result && result.error) {
-      button.disabled = false;
-      el('check-updates').disabled = false;
+      updateBusy = false;
+      renderUpdates();
       setUpdateStatus(result.error, true);
       return;
     }
     waitForClockToReturn();
   }).catch(function () {
-    // The restart can kill the connection before the reply arrives, which is
-    // success, not failure.
+    // The restart can take the connection down before the reply lands, which
+    // is success rather than failure.
     waitForClockToReturn();
   });
+}
+
+el('update-action').onclick = function () {
+  if (this.dataset.action === 'apply') applyUpdate(); else checkForUpdates();
 };
 
 function waitForClockToReturn() {
   var deadline = Date.now() + 180000;
   (function attempt() {
     if (Date.now() > deadline) {
+      updateBusy = false;
+      renderUpdates();
       setUpdateStatus('The clock has not come back. It restores the previous '
-        + 'version by itself if the new one will not start \u2014 wait a '
+        + 'version by itself if the new one will not start \u2014 give it a '
         + 'minute, then reload.', true);
       return;
     }
     api('/api/state').then(function (next) {
+      updateBusy = false;
       state = next;
       if (!dirty) draft = copy(next.settings);
       render();
       renderUpdates();
       setUpdateStatus('Updated. Now running '
-        + ((next.update && next.update.running &&
-            next.update.running.short) || 'the new version') + '.');
-      el('check-updates').disabled = false;
+        + ((next.update && next.update.running && next.update.running.short)
+           || 'the new version') + '.');
     }).catch(function () { setTimeout(attempt, 3000); });
   })();
 }

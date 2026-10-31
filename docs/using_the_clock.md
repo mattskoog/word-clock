@@ -238,10 +238,16 @@ difference between "it is cloudy" and "the clock has not managed to look".
 
 ## Keeping it up to date
 
-The clock checks for a newer version twice a day and says so under
-**Software** in the interface, with a **Check for updates** button if you do
-not want to wait. It shows what it is running and what is available, both as a
-commit and a date.
+Under **Software** the clock shows what it is running, and a single button
+offering whichever step comes next. Normally that is **Check for updates**;
+once a check has found something — whether you pressed the button or the
+clock's own twice-daily check did — the same button becomes **Update and
+restart**, and the version on offer is listed above it.
+
+While a check runs the button shows a spinner and reads *Checking*, because a
+fetch is a network round trip of unpredictable length. The result appears
+beside the button rather than in a dialog: it needs no decision from you, and
+a dialog would interrupt to say nothing.
 
 **It never updates itself.** Applying is always a press of **Update and
 restart**. That is deliberate: a clock given to somebody else is a clock you
